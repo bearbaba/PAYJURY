@@ -40,7 +40,7 @@ test('payment verification without a configured RPC refuses to prepare a case',a
     const res=await fetch(base+'/api/verify',{method:'POST',
       headers:{'content-type':'application/json'},body:JSON.stringify(claim)});
     assert.equal(res.status,503);
-    assert.match((await res.json()).error,/BASE_RPC_URL/);
+    assert.match((await res.json()).error,/Base RPC for selected network not configured/);
   });
 });
 test('empty or malformed verification payload is rejected without signing',async()=>{
@@ -62,7 +62,7 @@ test('payment auto-fill API refuses execution if Base RPC is not configured',asy
     const txHash='0x'+'a'.repeat(64);
     const res=await fetch(base+'/api/inspect?network=eip155:84532&txHash='+txHash);
     assert.equal(res.status,503);
-    assert.match((await res.json()).error,/BASE_RPC_URL not configured/);
+    assert.match((await res.json()).error,/Base RPC for selected network not configured/);
     const html=await (await fetch(base+'/')).text();
     assert.match(html,/id="autofill-transfer"/);
   });

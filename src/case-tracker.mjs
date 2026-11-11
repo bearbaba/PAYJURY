@@ -6,7 +6,7 @@ const VERDICTS=new Set(['ACCEPT','REWORK','UNVERIFIABLE']);
 
 // Read-only reconciliation across GenLayer and Base. Never signs, pays or files.
 // GenLayer contains submitted assertions; Base receipt independently proves only a transfer.
-export async function trackFiledCase(caseId, {readCase,verifyTransfer=verifyBaseUSDCTransfer,rpcUrl}={}){
+export async function trackFiledCase(caseId, {readCase,verifyTransfer=verifyBaseUSDCTransfer,rpcUrl,selectRpcUrl}={}){
   if(typeof caseId!=='string'||!CASE_ID.test(caseId))throw Error('Invalid case ID');
   if(typeof readCase!=='function')throw Error('GenLayer case reader unavailable');
   const record=await readCase(caseId);
@@ -22,10 +22,13 @@ export async function trackFiledCase(caseId, {readCase,verifyTransfer=verifyBase
     endpoint:record.endpoint,terms:record.terms,delivery:record.delivery,evidence:record.evidence
   });
   const identityBinding=caseIdForClaim(claim)===caseId?'DETERMINISTIC_ID_MATCHED':'NON_CANONICAL_ID';
-  let settlement={status:'NOT_VERIFIED',reason:rpcUrl?'BASE_RECEIPT_UNAVAILABLE':'BASE_RPC_NOT_CONFIGURED'};
-  if(rpcUrl){
+  // Routing the same RPC to both Base Mainnet and Sepolia yields false failures.
+  // The selection is made only after the filed record's network has been validated.
+  const receiptRpc=typeof selectRpcUrl==='function'?selectRpcUrl(claim.network):rpcUrl;
+  let settlement={status:'NOT_VERIFIED',reason:receiptRpc?'BASE_RECEIPT_UNAVAILABLE':'BASE_RPC_NOT_CONFIGURED'};
+  if(receiptRpc){
     try{
-      const proof=await verifyTransfer(claim,{rpcUrl,requiredConfirmations:2});
+      const proof=await verifyTransfer(claim,{rpcUrl:receiptRpc,requiredConfirmations:2});
       if(proof?.result!=='BASE_USDC_TRANSFER_VERIFIED'||proof.txHash!==claim.txHash||
          proof.network!==claim.network||proof.asset!==claim.asset||proof.payer!==claim.payer||
          proof.payee!==claim.payee||proof.amountAtomic!==claim.amountAtomic)

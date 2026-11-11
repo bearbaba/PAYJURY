@@ -5,6 +5,7 @@ import path from 'node:path';
 import {validateClaim,verifyBaseUSDCTransfer,inspectBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from './payment.mjs';
 import {trackFiledCase} from './case-tracker.mjs';
 import {serveV2X402} from './v2-x402-relay.mjs';
+import {createHostedOneShotLock,validUpstashConfig,LIVE_PAYMENT_SESSION} from './hosted-payment-lock.mjs';
 import {restoreAcceptedV2Case} from './v2-known-case.mjs';
 import {summarizeV2ReadOnlyTx} from './genlayer-v2-tx-outcome.mjs';
 import {isGenLayerOverlongRlpError} from './v2-raw-read.mjs';
@@ -14,6 +15,10 @@ const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8',
 const MAX_BODY=18000;
 const V1_ADDRESS='0xd57a04c3cc304ab30c9435a9ae34a840802f11c8';
 const v2Configured=address=>/^0x[0-9a-f]{40}$/i.test(address||'')&&address.toLowerCase()!==V1_ADDRESS;
+// Hosted purchases are opt-in, capped to one exact signed 0.01 test-USDC
+// transaction, and disabled unless the Redis SET NX lock is configured.
+const hostedCheckoutReady=()=>Boolean(process.env.VERCEL)&&
+  process.env.PAYJURY_NEW_CHECKOUT_ENABLED==='1'&&validUpstashConfig();
 function respond(res,status,data) {
   res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store',
     'x-content-type-options':'nosniff','referrer-policy':'no-referrer'});
@@ -127,7 +132,10 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
           genlayerContractAddress:/^0x[0-9a-f]{40}$/i.test(contract||'')?contract:null,
           genlayerV2ContractAddress:v2Configured(v2)?v2:null,
           v2FilingEnabled:v2Configured(v2),
-          acceptsPayments:false,hostedReadOnly:Boolean(process.env.VERCEL),signsGenLayerWrites:false});return;
+          acceptsPayments:hostedCheckoutReady(),
+          hostedReadOnly:Boolean(process.env.VERCEL)&&!hostedCheckoutReady(),
+          newPaymentEnabled:hostedCheckoutReady(),newPaymentSession:LIVE_PAYMENT_SESSION,
+          signsGenLayerWrites:false});return;
       }
       // ONE already-paid case restored from owner-supplied immutable evidence.
       // NO x402 PAYMENT-SIGNATURE, no wallet, no GenLayer writes or local lock reset.
@@ -149,13 +157,33 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
         }
         return;
       }
-      if(['/api/v2/x402/quote','/api/v2/x402/execute'].includes(url.pathname)){
+      if(['/api/v2/x402/quote','/api/v2/x402/execute','/api/v2/x402/session'].includes(url.pathname)){
         if(!v2Configured(process.env.GENLAYER_V2_CONTRACT_ADDRESS)){
-          respond(res,503,{error:'V2 contract not configured; x402 payment remains disabled.'});return;
+          respond(res,503,{error:'V2 contract not configured; new x402 payment disabled.'});return;
         }
-        // This route can relay a real signed payment. It uses only an
-        // exact-merchant, test-USDC, one-shot, per-payer lock. No server signer.
-        await serveV2X402({req,res,rpcUrl});
+        // Local Codespaces uses its existing durable owner-controlled file lock.
+        // Hosted Vercel rejects EVERY purchase until an atomic Redis store
+        // and explicit checkout flag are both configured.
+        const isHosted=Boolean(process.env.VERCEL);
+        if(isHosted&&!hostedCheckoutReady()){
+          respond(res,503,{error:'Hosted x402 checkout is locked pending a verified durable idempotency store. No payment forwarded.'});return;
+        }
+        const lockStore=isHosted?createHostedOneShotLock():null;
+        if(url.pathname==='/api/v2/x402/session'){
+          if(!lockStore){
+            respond(res,503,{error:'Hosted checkout session unavailable; no payment permitted.'});return;
+          }
+          try{
+            const locked=await lockStore.isLocked();
+            respond(res,200,{session:LIVE_PAYMENT_SESSION,readOnly:true,
+              paymentEnabled:!locked,locked,amountAtomic:'10000',
+              network:'eip155:84532',oneShot:true});
+          }catch{
+            respond(res,503,{error:'Cannot independently check checkout lock. No payment is permitted.'});
+          }
+          return;
+        }
+        await serveV2X402({req,res,rpcUrl,lockStore});
         return;
       }
       if(req.method==='GET'&&url.pathname==='/api/v2/read'){

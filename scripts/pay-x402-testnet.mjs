@@ -8,8 +8,8 @@ import {privateKeyToAccount} from 'viem/accounts';
 import {x402Client} from '@x402/core/client';
 import {ExactEvmScheme} from '@x402/evm/exact/client';
 import {wrapFetchWithPayment} from '@x402/fetch';
-import {fetchX402Quote} from '../src/x402.mjs';
 import {NETWORKS,decodeX402PaymentResponse,verifyBaseUSDCTransfer,validateClaim} from '../src/payment.mjs';
+import {checkTestnetPayerReady} from '../src/testnet-payer-preflight.mjs';
 
 export const PAYMENT_CAP_ATOMIC='10000'; // 0.01 USDC — immutable acceptance cap.
 const NETWORK='eip155:84532';
@@ -41,10 +41,14 @@ export async function runOnePayment({args=process.argv.slice(2),env=process.env}
   const privateKey=env.X402_TESTNET_PRIVATE_KEY,rpcUrl=env.BASE_RPC_URL;
   assertPaymentAuthorization({args,endpoint,host,payee,privateKey,rpcUrl});
   const asset=NETWORKS[NETWORK].usdc;
-  // Must match an actual live HTTP 402 quote BEFORE creating any signature.
-  const quote=await fetchX402Quote(endpoint,{allowedHost:host});
-  const offer=quote.options.find(x=>x.network===NETWORK&&x.asset===asset&&x.payee===payee&&x.amountAtomic===PAYMENT_CAP_ATOMIC);
-  if(!offer)throw Error('Approved exact payment was not offered; no wallet signing');
+  // Refuse any signing until real quote, exact merchant, Base Sepolia RPC,
+  // and official test USDC balance are independently checked.
+  const readiness=await checkTestnetPayerReady({env});
+  if(readiness.status!=='X402_TESTNET_PAYER_READY_NO_SIGNATURE' ||
+    readiness.amountAtomic!==PAYMENT_CAP_ATOMIC || readiness.merchant!==payee ||
+    readiness.network!==NETWORK || readiness.asset!==asset) {
+    throw Error('Testnet payer readiness did not match the approved purchase');
+  }
   const signer=privateKeyToAccount(privateKey);
   const marker='.payjury-payment-attempt-'+createHash('sha256').update(endpoint+'|'+signer.address).digest('hex').slice(0,20)+'.lock';
   // Network failures can occur after remote settlement. Keep the marker permanently.
@@ -70,8 +74,27 @@ export async function runOnePayment({args=process.argv.slice(2),env=process.env}
   const claim=validateClaim({network:NETWORK,asset,txHash,payer:signer.address,payee,amountAtomic:PAYMENT_CAP_ATOMIC,
     endpoint,terms:'Receipt verification only',delivery:'Receipt verification only',evidence:'Receipt verification only'});
   decodeX402PaymentResponse(header,claim);
-  // Read-only independent Base RPC receipt; no additional payment is authorized.
-  const chainProof=await verifyBaseUSDCTransfer(claim,{rpcUrl,requiredConfirmations:2});
+  // Save the public settlement hash BEFORE waiting for block confirmations.
+  // This is NOT yet an independently verified on-chain payment.
+  console.log('PAYJURY_X402_REPORTED_SETTLEMENT',JSON.stringify({
+    network:NETWORK,txHash,payer:signer.address,payee,
+    source:'PAYMENT-RESPONSE_UNVERIFIED',signedPaymentAttempted:true,
+    warning:'Read-only confirmation pending. NEVER invoke payment command again to resolve receipt lag.'
+  }));
+  // Poll ONLY transaction receipts, never re-submit a payment or authorization.
+  // Base Sepolia may report a successful facilitator settlement before two blocks.
+  let chainProof=null;
+  for(let attempt=0;attempt<10;attempt++){
+    try{
+      chainProof=await verifyBaseUSDCTransfer(claim,{rpcUrl,requiredConfirmations:2});
+      break;
+    }catch(error){
+      const reason=String(error?.message||'');
+      const pending=/^(Transaction receipt unavailable|Transaction not sufficiently confirmed|RPC response unavailable|RPC HTTP unavailable)/.test(reason);
+      if(!pending||attempt===9)throw Error('PAYMENT_REPORTED_RECEIPT_NOT_CONFIRMED');
+      await new Promise(resolve=>setTimeout(resolve,1800));
+    }
+  }
   const body=await response.text();
   console.log('PAYJURY_X402_PAYMENT_AND_TRANSFER_VERIFIED',JSON.stringify({
     network:NETWORK,txHash,amountAtomic:PAYMENT_CAP_ATOMIC,confirmedBlock:chainProof.blockNumber,

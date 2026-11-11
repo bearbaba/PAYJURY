@@ -85,6 +85,9 @@ class AuthorizationTests(unittest.TestCase):
         self.ic=make()
         FakeGL.message.sender_address=STRANGER
 
+    def test_version_identity_guards_browser_signing(self):
+        self.assertEqual(self.ic.version(),"PAYJURY_V2_PAYMENT_SCOPED_AUTH_V1")
+
     def test_canonical_ids_match_the_actual_javascript_case_id_algorithm(self):
         # Cross-language proof: direct GenLayer V2 canonicalization must produce
         # the same case ID as src/payment.mjs, including escaped Unicode.

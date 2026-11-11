@@ -636,3 +636,48 @@ freshPayButton.addEventListener('click',async()=>{
   }finally{freshBusy=false;refreshFreshButtons();}
 });
 refreshFreshButtons();
+
+/* Continue the owner's already-paid V2 acceptance case with NO new payment.
+   The server independently rechecks Base USDC before restoring immutable data. */
+$('v2-restore-paid').addEventListener('click',async()=>{
+  const button=$('v2-restore-paid'),message=$('v2-restore-status');
+  if(button.disabled)return;
+  button.disabled=true;
+  message.textContent='Rechecking original Base Sepolia USDC receipt. No API purchase, wallet signature or GenLayer write.';
+  try{
+    const res=await fetch('/api/v2/resume-known',{method:'GET',cache:'no-store'});
+    const p=await res.json();
+    if(!res.ok)throw Error(p.error||'Original payment could not be verified');
+    if(p.restoredReadOnly!==true||p.status!=='PREPARED_NOT_FILED'||
+       p.settlement?.result!=='BASE_USDC_TRANSFER_VERIFIED'||
+       p.caseId!=='pj_9f2276fd1904120b16d5f5b6ea5f7a2b'||
+       p.txHash!=='0x6edc3d9a0589f22e55ca4f348bc021df70b5644b437fef054099391fae798ae2')
+      throw Error('Recovered case identity, payment or receipt did not match the original V2 acceptance');
+    for(const [name,value] of [
+      ['network',p.network],['txHash',p.txHash],['asset',p.token],
+      ['payer',p.payer],['payee',p.payee],['amountAtomic',p.amountAtomic],
+      ['endpoint',p.endpoint],['terms',p.terms],
+      ['delivery',p.delivery],['evidence',p.evidence]
+    ]){
+      const input=form.elements.namedItem(name);
+      if(!input)throw Error('Case form missing '+name);
+      input.value=value;
+    }
+    packet=p;
+    updateV2PreparedPacket(p);
+    setWorkflowStage(3);
+    $('case-id').textContent=p.caseId;
+    $('verdict').textContent='NOT FILED';
+    $('track-id').value=p.caseId;
+    $('track-version').value='v2';
+    $('copy-case').disabled=false;
+    $('read-verdict').disabled=true;
+    display('BASE USDC VERIFIED','Already-paid V2 case restored',
+      'Original Base Sepolia USDC receipt independently reverified. No new payment, GenLayer filing or AI verdict occurred. Connect the same wallet on Studionet and review File Case.','success');
+    message.textContent='Original payment reverified · '+p.settlement.confirmations+
+      ' Base confirmations · case '+p.caseId+'. Continue with GenLayer wallet. Do NOT pay x402 again.';
+  }catch(error){
+    message.textContent='Restore stopped: '+String(error?.message||error).slice(0,220)+
+      '. Original x402 payment must NOT be repeated.';
+  }finally{button.disabled=false;}
+});

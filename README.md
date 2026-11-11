@@ -117,3 +117,15 @@ This new script reads the *existing deployment transaction only*, checks whether
 After configuring an explicit Base Sepolia provider, exact merchant and **a dedicated testnet wallet secret in Codespaces Secrets**, run `npm run pay:preflight` before any payment. It reads the real x402 V2 quote, checks `eth_chainId=84532`, queries the official test USDC `balanceOf`, and refuses to authorize signing if test USDC is less than 0.01, the merchant differs, or the network is wrong. Never paste secrets into the chat or commit them.
 
 The separately approved paid CLI now logs `PAYJURY_X402_REPORTED_SETTLEMENT` with a public transaction hash as soon as it receives a matching PAYMENT-RESPONSE, **before** limited read-only receipt polling. A pending confirmation does not trigger another signed payment. The one-shot marker remains permanent even if readback times out. See [live client runbook](docs/X402_LIVE_CLIENT.md).
+
+## First real PAYJURY x402 payment — November 11, 2026
+
+The operator reported a **successful one-shot x402 V2 payment on Base Sepolia**, after a funded testnet-wallet preflight. PAYJURY independently verified the exact Base USDC Transfer via RPC and recorded [TX `0x2f5380...ef4d5`](https://sepolia.basescan.org/tx/0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5), amount `10000` atomic USDC, block `57288759` and **10 confirmations** at observation. The client also recorded a hash of the HTTP response body but **did not retain the body bytes**. This proves payment settlement and receipt of a response for this test; it is not a full API-content-quality judgment or a completed GenLayer E2E case.
+
+**Do not pay again.** For an independent read-only receipt check and the original GenLayer filing fields, run:
+
+```bash
+BASE_RPC_URL=https://sepolia.base.org npm run case:prepare
+```
+
+Read [the first paid case runbook](docs/FIRST_PAID_CASE.md). The command exports a case packet to `out/` for inspection; it never signs or files. Filing and adjudication require separate manual Studio operations and real finalized GenVM receipts.

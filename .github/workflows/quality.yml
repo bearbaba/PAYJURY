@@ -33,6 +33,7 @@ jobs:
           node --check src/testnet-payer-preflight.mjs
           node --check scripts/verify-genlayer-deployment.mjs
           node --check scripts/inspect-deploy-tx.mjs
+          node --check scripts/prepare-first-paid-case.mjs
           node --check web/app.js
       - name: Offline unit tests and Python contract syntax
         run: npm run check

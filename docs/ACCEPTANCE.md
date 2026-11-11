@@ -20,7 +20,7 @@
 - [x] Immutable case packet derivation and source of truth labels.
 - [x] GenLayer contract source with AI validator adjudication methods.
 - [x] Three-step web foundation and fail-closed verdict read.
-- [ ] Real x402 paid request **specifically for PAYJURY**, with signed client/facilitator receipt and Base explorer evidence.
+- [x] **Operator-observed PAYJURY x402 V2 paid request** completed on Base Sepolia, with original client log `PAYJURY_X402_PAYMENT_AND_TRANSFER_VERIFIED`, 10 confirmations, 0.01 test USDC and public transaction reference (see below). Original HTTP response body was not retained; original evidence is terminal log and transfer receipt; independently fetched public explorer proof is recommended.
 - [x] **Operator-provided official Explorer evidence** of Studionet deployment (11 Nov 2026, 12:36:23 Vietnam time), status FINALIZED, GenVM SUCCESS, Consensus Accepted; see transaction and address below. **Source equivalence and independent RPC receipt remain unverified.**
 - [ ] Real immutable PAYJURY case `file_case` FINALIZED and independent readback.
 - [ ] Real `adjudicate_case` FINALIZED / successful validator receipts and matching `get_case=DECIDED`.
@@ -62,3 +62,15 @@ npm run contract:verify # separate source-identity check; RPC may return -32603
 If `deploy:inspect` cannot read the transaction but the Explorer remains finalized-successful, keep the operator's verified Explorer evidence and record the SDK limitation. Do not overwrite the deployment, re-sign, re-deploy, or treat a transport failure as proof of a failed deploy.
 
 **Next acceptance:** obtain an actual x402 payment associated with PAYJURY, then file exactly one matching case and obtain a finalized adjudication readback on this existing contract. No new on-chain write is authorized by this documentation.
+
+## PAYJURY payment acceptance — 11 November 2026
+
+The operator completed a single approved PayAI Echo Base Sepolia purchase through the repository's x402 SDK client. Logs showed `PAYJURY_X402_ONE_SHOT_STARTED`, `PAYJURY_X402_REPORTED_SETTLEMENT`, and `PAYJURY_X402_PAYMENT_AND_TRANSFER_VERIFIED` in that order. The final client verification reported matching official USDC Transfer for **10,000 atomic units (0.01 test USDC)** in Base Sepolia block **57288759**, **10 confirmations** at observation.
+
+- Payment TX: [`0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5`](https://sepolia.basescan.org/tx/0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5).
+- Buyer: `0xd6b8a3a5eb329410d9504784812b8569afa8c2af`; approved merchant: `0xe3837fe309618ae075dbef0a20735c0615a308e6`.
+- Original response-body SHA-256: `714c6f1a9a7ae5699b5736867920fad329b2dfa09f7f1f296e2045ee0e07ab73`. Raw response data was **not** saved; do not claim to have verified response content or a provider-signed delivery attestation.
+- Run `BASE_RPC_URL=https://sepolia.base.org npm run case:prepare` to recheck the transfer independently (read-only) and export the deterministic case payload. It does **not** file a GenLayer transaction.
+- Still pending: exact case `file_case` and `adjudicate_case` FINALIZED + GenVM SUCCESS, stable `get_case=DECIDED` readback; full product-quality acceptance remains incomplete.
+
+**Critical:** this is a paid Echo service test, not proof of provider misconduct, content quality or a refund. Keep the original one-shot marker; never trigger a second payment to improve the presentation.

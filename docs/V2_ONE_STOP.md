@@ -1,6 +1,7 @@
 # PAYJURY V2 — One-stop UX and payer-authorized disputes
 
-**As of 11 November 2026:** V1 payment, filing and `ACCEPT` verdict were genuinely observed on testnets. **V2 is a new source implementation and has NOT been deployed, authorized, or tested with signed GenLayer transactions.** Keep V1 address `0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8` for historical readback. Never replace it with V2 source or redeploy V1 to chase a new hash.
+> **DEPLOYMENT UPDATE — 11 NOV 2026:** Owner-supplied [GenLayer TX `0x1fd845e9...76045f98`](https://explorer-studio.genlayer.com/tx/0x1fd845e9574e6c0956d5fd03afac8c7c70e75ea6532d4095fae3aa1276045f98) shows Studionet deployment **FINALIZED / GenVM SUCCESS / Consensus Accepted** for `0x0a6171C6a580c58d999a251436CE7c63FFc3dc31`. This satisfies the reported deployment transaction milestone, but the exact deployed-source equivalence, `version()` and rights readback and V2 signed-case acceptance remain **unverified**. Run `npm run v2:verify` to inspect read-only. **Never redeploy based only on an RPC read failure.**\n\n
+**As of 11 November 2026:** V1 payment, filing and `ACCEPT` verdict were genuinely observed on testnets. **V2 has an owner-reported finalized deploy transaction, but it has NOT yet passed independent method/source verification or signed-case acceptance.** Keep V1 address `0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8` for historical readback. Never replace it with V2 source or redeploy V1 to chase a new hash.
 
 ## Why a new contract
 
@@ -23,12 +24,12 @@ The existing website offers **paste Base TX → auto-detect exact USDC Transfer 
 
 **Historic V1:** Original 0.01 USDC testnet payment `0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5` was already filed and decided. Browser disallows V2 re-filing that known paid transaction; no payment replay is needed for V2 validation.
 
-## Deployment gate (NOT yet met)
+## Deployment gate (deployment TX observed; readback and live authorization pending)
 
 1. Review `contracts/PayJuryV2.py` and offline Python tests `tests/test_contract_v2.py`; verify `npm run check`, `npm run build:web` and GitHub Actions PASS.
-2. Import the V2 source into **GenLayer Studio Studionet 61999**. Deploy it using a dedicated GenLayer test wallet **only with explicit owner authorization**. Never replace V1 at the old address.
-3. Independently check the real new deployment TX: FINALIZED, GenVM SUCCESS and the actual V2 contract address. Confirm the deployed methods `version`, `set_delegate`, `can_file_for`, `filing_status`, `file_case`, `adjudicate_case`, `get_case`. The read-only `version()` must return exactly `PAYJURY_V2_PAYMENT_SCOPED_AUTH_V1`. Also verify actual source identity if RPC permits; a version marker alone can be imitated.
-4. Only after an actual verified deployment, set `GENLAYER_V2_CONTRACT_ADDRESS=<NEW_VERIFIED_ADDRESS>` in private `.env` and restart the website. **Never use the V1 address as the V2 address.**
+2. **Deployment already completed:** inspect the reported TX and the contract address above. Do not deploy again. Never replace V1 at its old address.
+3. Run `npm run v2:verify` to independently check the reported deploy TX, version marker and payer-versus-stranger authorization behavior without signing. Confirm real deployment TX FINALIZED/GenVM SUCCESS and the V2 address. Confirm the deployed methods `version`, `set_delegate`, `can_file_for`, `filing_status`, `file_case`, `adjudicate_case`, `get_case`. The read-only `version()` must return exactly `PAYJURY_V2_PAYMENT_SCOPED_AUTH_V1`. Also verify actual source identity if RPC permits; a version marker alone can be imitated.
+4. Only after deployment and V2 method checks pass, set `GENLAYER_V2_CONTRACT_ADDRESS=0x0a6171C6a580c58d999a251436CE7c63FFc3dc31` in private `.env` and restart the website. **Never use the V1 address as the V2 address.**
 5. On a brand-new **independently verified payment reference** (do not re-pay the old test to fabricate coverage), verify source data; confirm payer wallet files directly and unauthorized stranger is rejected. For the delegation path, have the payer sign **set_delegate(..., true)**, confirm its FINALIZED/SUCCESS and `can_file_for` return `true`. Then delegate files a different legitimate case. Finally payer signs revocation and confirms `can_file_for(...)=false`.
 6. Independently check onchain finalized `file_case`, `get_case=FILED`, finalized `adjudicate_case`, and `get_case=DECIDED` with a real case verdict. Do not demand a specific favorable result.
 

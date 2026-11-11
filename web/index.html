@@ -46,6 +46,9 @@
       </div>
       <div class="panel tracker-panel">
         <form id="track-form" class="tracker-form">
+          <label for="track-version">Contract version
+            <select id="track-version" name="version"><option value="v1">V1 · Verified history</option><option value="v2">V2 · Authorized filing</option></select>
+          </label>
           <label for="track-id">GenLayer Case ID
             <input id="track-id" name="caseId" placeholder="pj_…" required pattern="pj_[0-9a-f]{32}" maxlength="35" autocomplete="off" spellcheck="false">
           </label>

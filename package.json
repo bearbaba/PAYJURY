@@ -18,7 +18,8 @@
     "deploy:inspect": "node scripts/inspect-deploy-tx.mjs",
     "pay:preflight": "node --env-file-if-exists=.env scripts/preflight-x402-payer.mjs",
     "case:prepare": "node --env-file-if-exists=.env scripts/prepare-first-paid-case.mjs",
-    "build:web": "esbuild web/studio-wallet.mjs --bundle --platform=browser --format=esm --target=es2022 --outfile=web/studio-wallet.bundle.js"
+    "build:web": "esbuild web/studio-wallet.mjs --bundle --platform=browser --format=esm --target=es2022 --outfile=web/studio-wallet.bundle.js",
+    "v2:verify": "node scripts/verify-v2-deployment.mjs"
   },
   "dependencies": {
     "@x402/core": "2.30.0",

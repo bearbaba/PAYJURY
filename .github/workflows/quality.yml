@@ -36,6 +36,7 @@ jobs:
           node --check scripts/verify-genlayer-deployment.mjs
           node --check scripts/inspect-deploy-tx.mjs
           node --check scripts/prepare-first-paid-case.mjs
+          node --check scripts/verify-v2-deployment.mjs
           node --check web/app.js
       - name: Build self-hosted browser wallet module (no remote scripts)
         run: npm run build:web

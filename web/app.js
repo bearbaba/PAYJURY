@@ -289,19 +289,31 @@ async function v2Write(method,caseId,args,metadata=null){
     'An earlier write attempt has an unknown outcome. Review wallet activity before any resubmission.');
   const sdk=await getV2Sdk();
   v2Busy=true;v2Controls();
+  let writeAttempted=false;
   try{
-    // Lock BEFORE writeContract. If no hash comes back, never assume failure.
+    // This is only a fee simulation, not a wallet signature or GenLayer
+    // transaction. On RPC errors no transaction lock should be created.
+    v2Message('Estimating '+method+' network fees (read-only). No wallet signature yet.');
+    const estimate=await sdk.estimateV2WriteFees(v2Address,method,args);
+    // Lock ONLY after successful fee preflight and BEFORE writeContract.
+    // If a hash never comes back, never assume the transaction failed.
     writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN',delegation:metadata,when:new Date().toISOString()});
-    const hash=await sdk.sendV2Write(v2Address,method,args);
+    writeAttempted=true;
+    const hash=await sdk.sendV2Write(v2Address,method,args,estimate);
     writeLock(caseId,method,{state:'SUBMITTED',hash,delegation:metadata,when:new Date().toISOString()});
     v2Message(method+' submitted: '+hash+'. Checking GenLayer finality without resending.');
     await monitorSubmitted(caseId,method,hash);
   }catch(error){
+    if(!writeAttempted){
+      v2Message('Fee estimation failed BEFORE any wallet transaction or signature. No one-shot write lock was created. '+
+        String(error?.shortMessage||error?.message||'GenLayer fee quote unavailable').slice(0,160));
+      return;
+    }
     const explicitlyRejected=error?.code===4001||
       error?.cause?.code===4001||
-      /user rejected|user denied|user cancelled/i.test(String(error?.shortMessage||''));
+      /user rejected|user denied|user cancelled/i.test(String(error?.shortMessage||error?.message||''));
     if(explicitlyRejected){
-      // EIP-1193 explicit rejection means no wallet signature/broadcast occurred.
+      // Explicit user rejection means the wallet did not authorize broadcast.
       globalThis.localStorage.removeItem(lockKey(caseId,method));
       v2Message('Wallet rejected the signing request. No new GenLayer transaction was authorized.');
     }else{

@@ -47,3 +47,9 @@
 .v2-status{color:#d4e3ee;background:#162536;padding:12px 15px;border-radius:9px;border:1px solid #354651;line-height:1.6;font-size:12px;overflow-wrap:anywhere}
 .v2-disclaimer{color:#829caa;font-size:11px;line-height:1.7}
 @media(max-width:600px){.v2-overview{grid-template-columns:1fr}.v2-overview>div:last-child{grid-column:1}.v2-buttons button{flex:1 1 40%}}
+
+/* Receipt auto-fill is intentionally read-only; all inferred fields are reviewable. */
+.autofill-row{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:0 0 20px}
+.autofill-row button{border:1px solid #8fb375;background:#1a2d2c;color:#dcf6d6;border-radius:8px;padding:11px 14px;font-size:12px;font-weight:800}
+.autofill-row button:disabled{opacity:.55;cursor:progress}
+.autofill-row span{font-size:11px;color:#a9bdcb;line-height:1.6;flex:1 1 250px}

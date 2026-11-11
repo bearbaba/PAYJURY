@@ -390,7 +390,7 @@ async function authorizeDelegate(enabled){
   try{
     const sdk=await getV2Sdk();
     await requireGenuineV2Interface(sdk);
-    const permission=await sdk.readV2Contract(v2Address,'can_file_for',[payer,delegate]);
+    const permission=await sdk.readV2Contract(v2Address,'can_file_for',[payer,network,txHash,delegate]);
     if(typeof permission!=='boolean')throw Error('Delegation status was not a verified boolean.');
     if(permission===enabled){
       v2Message('Delegation is already '+(enabled?'authorized':'revoked')+'. No transaction needed.');

@@ -65,3 +65,14 @@ test('V2 tracker reads only the configured second contract, not historical V1',a
     await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
   }
 });
+
+test('browser delegation preflight sends 4 exact payment-scoped arguments to deployed V2',async()=>{
+  const fs=await import('node:fs/promises');
+  const src=await fs.readFile(new URL('../web/app.js',import.meta.url),'utf8');
+  const contract=await fs.readFile(new URL('../contracts/PayJuryV2.py',import.meta.url),'utf8');
+  assert.match(contract,/def can_file_for\(self, payer: str, network: str,\s+tx_hash: str, submitter: str\)/);
+  assert.match(src,/readV2Contract\(v2Address,'can_file_for',\[payer,network,txHash,delegate\]\)/);
+  assert.doesNotMatch(src,/readV2Contract\(v2Address,'can_file_for',\[payer,delegate\]\)/);
+  assert.match(src,/v2Write\('set_delegate',key,\[network,txHash,delegate,enabled\]/);
+  assert.match(contract,/def set_delegate\(self, network: str, tx_hash: str,/);
+});

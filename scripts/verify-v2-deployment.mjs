@@ -132,10 +132,22 @@ export async function verifyV2ReadOnly({getTransaction,readContract,getContractC
   }
   const successfulTx=out.deployment?.result==='FINALIZED_GENVM_SUCCESS_ADDRESS_MATCHED';
   const correctMethods=out.version===V2_MARKER&&out.payerCanFile===true&&out.strangerCanFile===false;
-  out.result=successfulTx&&correctMethods&&out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'&&out.sourceIdentity!=='SOURCE_FORMAT_ONLY_DIFFERENCE'?
-    'V2_DEPLOY_AND_AUTHORIZATION_READBACK_PASS':correctMethods&&
-      out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'&&out.sourceIdentity!=='SOURCE_FORMAT_ONLY_DIFFERENCE'?
-      'V2_METHODS_PASS_DEPLOY_TX_READ_UNCONFIRMED':'V2_NOT_READY_FOR_SIGNING';
+  // The signer is NEVER activated by this report. Even a byte-exact match
+  // must be reviewed and the owner must explicitly configure the V2 address.
+  const matchedExact=out.sourceIdentity==='SOURCE_TEXT_MATCHED';
+  const matchedContent=out.sourceIdentity==='SOURCE_FORMAT_ONLY_DIFFERENCE'&&
+    out.sourceDiagnosis?.normalizedSha256===out.sourceDiagnosis?.deployedNormalizedSha256;
+  out.sourceContentMatched=matchedExact||matchedContent;
+  out.requiresManualWalletApproval=true;
+  out.result=successfulTx&&correctMethods&&matchedExact?
+    'V2_DEPLOY_AND_AUTHORIZATION_READBACK_PASS':
+    successfulTx&&correctMethods&&matchedContent?
+      'V2_DEPLOY_AND_AUTHORIZATION_FORMAT_ONLY_REVIEW_REQUIRED':
+    successfulTx&&correctMethods&&out.sourceIdentity==='UNVERIFIED'?
+      'V2_READBACK_PASS_SOURCE_UNVERIFIED':
+    correctMethods&&out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'?
+      'V2_METHODS_PASS_DEPLOY_TX_READ_UNCONFIRMED':
+    'V2_NOT_READY_FOR_SIGNING';
   if(out.sourceIdentity==='SOURCE_TEXT_MISMATCH')
     out.warnings.push('SOURCE_MISMATCH: do not enable signing. Confirm deployed source independently.');
   if(out.sourceIdentity==='SOURCE_FORMAT_ONLY_DIFFERENCE')
@@ -143,8 +155,10 @@ export async function verifyV2ReadOnly({getTransaction,readContract,getContractC
   if(out.sourceIdentity==='UNVERIFIED')
     out.warnings.push('SOURCE_IDENTITY_NOT_PROVEN: version marker and authorization methods are not byte-for-byte proof of deployed source.');
   out.next=out.result==='V2_DEPLOY_AND_AUTHORIZATION_READBACK_PASS'?
-    'Read-only checks passed. Manually review the contract/source evidence before setting GENLAYER_V2_CONTRACT_ADDRESS; no case has been filed in V2.':
-    'Keep V2 signing disabled; inspect TX and read failures without retrying deployment.';
+    'Byte-exact source and method reads passed. Owner must still review wallet UX before explicitly configuring V2; no transaction was sent.':
+    out.result==='V2_DEPLOY_AND_AUTHORIZATION_FORMAT_ONLY_REVIEW_REQUIRED'?
+    'Deployed Python content matches repository after strictly limited newline normalization. Raw bytes differ; no code-line difference. Owner may review the source and opt in to a controlled Studionet wallet test. Do not sign or repay automatically.':
+    'Keep V2 signing disabled; inspect TX, source and rights without retrying deployment.';
   return out;
 }
 if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]){

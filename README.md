@@ -4,7 +4,7 @@
 
 PAYJURY is a non-custodial, evidence-first dispute lab for paid AI/API services. It connects the **x402 HTTP payment standard** with **GenLayer Intelligent Contracts** through a minimal **Pay → Dispute → Verdict** experience.
 
-> **Live acceptance, 11 Nov 2026:** The first **testnet x402 → Base USDC Transfer → GenLayer case filing → AI verdict** was completed: `DECIDED / ACCEPT` with public transactions. The website is a **read-only case tracker** and proof builder, not yet an integrated signer. The original HTTP response bytes were not preserved; claimant authorization and production readiness remain open. **9.5/10 is an internal quality target, not a jury score.**
+> **V2 development milestone:** PAYJURY V2 source adds payer/delegate authorization, canonical case IDs and replay protection. A browser wallet workflow is implemented behind a **disabled deployment gate** until a separate V2 contract is independently deployed and verified. See [V2 One-Stop Plan & Acceptance](docs/V2_ONE_STOP.md). No V2 write has yet been signed.\n\n> **Live acceptance, 11 Nov 2026:** The first **testnet x402 → Base USDC Transfer → GenLayer case filing → AI verdict** was completed: `DECIDED / ACCEPT` with public transactions. The website is a **read-only case tracker** and proof builder, not yet an integrated signer. The original HTTP response bytes were not preserved; claimant authorization and production readiness remain open. **9.5/10 is an internal quality target, not a jury score.**
 
 ## Why PAYJURY
 
@@ -131,3 +131,9 @@ On **11 November 2026**, PAYJURY processed one genuine 0.01 test USDC x402 paid 
 - **Case:** `pj_3f6b4f29a744db71c63f9acf552d2a19` — Studio readback: `DECIDED`, `ACCEPT` with recorded rationale. The verdict evaluated the narrow payment-and-HTTP-receipt claim; original API response body was not retained.
 
 [Full evidence ledger, verdict rationale, and limits](docs/ACCEPTANCE.md).
+
+## One-stop wallet workflow — PAYJURY V2 (predeployment)
+
+The website now has a guarded workflow for **Verify → Review → Connect GenLayer wallet → File → AI verdict**. V2 is distinct from V1 and **not yet deployed**. Signing controls remain inactive until a verified new V2 address is configured with `GENLAYER_V2_CONTRACT_ADDRESS`. Direct payer signatures or payer-signed on-chain delegation are enforced inside the proposed V2 contract; unauthenticated third parties are rejected. No private key is stored in the browser app or backend. Browser wallet actions will need live Studio acceptance once V2 is actually deployed.
+
+**Do not reuse the historic V1 payment or V1 contract address for a V2 case.** See [V2 authorization and deployment acceptance](docs/V2_ONE_STOP.md).

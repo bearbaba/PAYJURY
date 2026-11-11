@@ -289,19 +289,31 @@ async function v2Write(method,caseId,args,metadata=null){
     'An earlier write attempt has an unknown outcome. Review wallet activity before any resubmission.');
   const sdk=await getV2Sdk();
   v2Busy=true;v2Controls();
+  let writeAttempted=false;
   try{
-    // Lock BEFORE writeContract. If no hash comes back, never assume failure.
+    // This is only a fee simulation, not a wallet signature or GenLayer
+    // transaction. On RPC errors no transaction lock should be created.
+    v2Message('Estimating '+method+' network fees (read-only). No wallet signature yet.');
+    const estimate=await sdk.estimateV2WriteFees(v2Address,method,args);
+    // Lock ONLY after successful fee preflight and BEFORE writeContract.
+    // If a hash never comes back, never assume the transaction failed.
     writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN',delegation:metadata,when:new Date().toISOString()});
-    const hash=await sdk.sendV2Write(v2Address,method,args);
+    writeAttempted=true;
+    const hash=await sdk.sendV2Write(v2Address,method,args,estimate);
     writeLock(caseId,method,{state:'SUBMITTED',hash,delegation:metadata,when:new Date().toISOString()});
     v2Message(method+' submitted: '+hash+'. Checking GenLayer finality without resending.');
     await monitorSubmitted(caseId,method,hash);
   }catch(error){
+    if(!writeAttempted){
+      v2Message('Fee estimation failed BEFORE any wallet transaction or signature. No one-shot write lock was created. '+
+        String(error?.shortMessage||error?.message||'GenLayer fee quote unavailable').slice(0,160));
+      return;
+    }
     const explicitlyRejected=error?.code===4001||
       error?.cause?.code===4001||
-      /user rejected|user denied|user cancelled/i.test(String(error?.shortMessage||''));
+      /user rejected|user denied|user cancelled/i.test(String(error?.shortMessage||error?.message||''));
     if(explicitlyRejected){
-      // EIP-1193 explicit rejection means no wallet signature/broadcast occurred.
+      // Explicit user rejection means the wallet did not authorize broadcast.
       globalThis.localStorage.removeItem(lockKey(caseId,method));
       v2Message('Wallet rejected the signing request. No new GenLayer transaction was authorized.');
     }else{
@@ -636,3 +648,48 @@ freshPayButton.addEventListener('click',async()=>{
   }finally{freshBusy=false;refreshFreshButtons();}
 });
 refreshFreshButtons();
+
+/* Continue the owner's already-paid V2 acceptance case with NO new payment.
+   The server independently rechecks Base USDC before restoring immutable data. */
+$('v2-restore-paid').addEventListener('click',async()=>{
+  const button=$('v2-restore-paid'),message=$('v2-restore-status');
+  if(button.disabled)return;
+  button.disabled=true;
+  message.textContent='Rechecking original Base Sepolia USDC receipt. No API purchase, wallet signature or GenLayer write.';
+  try{
+    const res=await fetch('/api/v2/resume-known',{method:'GET',cache:'no-store'});
+    const p=await res.json();
+    if(!res.ok)throw Error(p.error||'Original payment could not be verified');
+    if(p.restoredReadOnly!==true||p.status!=='PREPARED_NOT_FILED'||
+       p.settlement?.result!=='BASE_USDC_TRANSFER_VERIFIED'||
+       p.caseId!=='pj_9f2276fd1904120b16d5f5b6ea5f7a2b'||
+       p.txHash!=='0x6edc3d9a0589f22e55ca4f348bc021df70b5644b437fef054099391fae798ae2')
+      throw Error('Recovered case identity, payment or receipt did not match the original V2 acceptance');
+    for(const [name,value] of [
+      ['network',p.network],['txHash',p.txHash],['asset',p.token],
+      ['payer',p.payer],['payee',p.payee],['amountAtomic',p.amountAtomic],
+      ['endpoint',p.endpoint],['terms',p.terms],
+      ['delivery',p.delivery],['evidence',p.evidence]
+    ]){
+      const input=form.elements.namedItem(name);
+      if(!input)throw Error('Case form missing '+name);
+      input.value=value;
+    }
+    packet=p;
+    updateV2PreparedPacket(p);
+    setWorkflowStage(3);
+    $('case-id').textContent=p.caseId;
+    $('verdict').textContent='NOT FILED';
+    $('track-id').value=p.caseId;
+    $('track-version').value='v2';
+    $('copy-case').disabled=false;
+    $('read-verdict').disabled=true;
+    display('BASE USDC VERIFIED','Already-paid V2 case restored',
+      'Original Base Sepolia USDC receipt independently reverified. No new payment, GenLayer filing or AI verdict occurred. Connect the same wallet on Studionet and review File Case.','success');
+    message.textContent='Original payment reverified · '+p.settlement.confirmations+
+      ' Base confirmations · case '+p.caseId+'. Continue with GenLayer wallet. Do NOT pay x402 again.';
+  }catch(error){
+    message.textContent='Restore stopped: '+String(error?.message||error).slice(0,220)+
+      '. Original x402 payment must NOT be repeated.';
+  }finally{button.disabled=false;}
+});

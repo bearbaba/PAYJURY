@@ -5,6 +5,7 @@ import path from 'node:path';
 import {validateClaim,verifyBaseUSDCTransfer,inspectBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from './payment.mjs';
 import {trackFiledCase} from './case-tracker.mjs';
 import {serveV2X402} from './v2-x402-relay.mjs';
+import {restoreAcceptedV2Case} from './v2-known-case.mjs';
 import {isGenLayerOverlongRlpError} from './v2-raw-read.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
@@ -131,6 +132,26 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
           genlayerV2ContractAddress:v2Configured(v2)?v2:null,
           v2FilingEnabled:v2Configured(v2),
           acceptsPayments:false,signsGenLayerWrites:false});return;
+      }
+      // ONE already-paid case restored from owner-supplied immutable evidence.
+      // NO x402 PAYMENT-SIGNATURE, no wallet, no GenLayer writes or local lock reset.
+      if(req.method==='GET'&&url.pathname==='/api/v2/resume-known'){
+        if(!v2Configured(process.env.GENLAYER_V2_CONTRACT_ADDRESS)){
+          respond(res,503,{error:'V2 contract is not configured; recovery unavailable'});return;
+        }
+        const selectedRpc=rpcForNetwork('eip155:84532');
+        if(!selectedRpc){
+          respond(res,503,{error:'Base Sepolia RPC unavailable; cannot reverify existing payment'});return;
+        }
+        try{
+          const packet=await restoreAcceptedV2Case({verifyTransfer,rpcUrl:selectedRpc});
+          respond(res,200,{...packet,restoredReadOnly:true,
+            genlayerFileCaseSubmitted:false,genlayerDecisionSubmitted:false,
+            note:'Owner-supplied original x402 evidence recovered after fresh Base USDC verification. PREPARED_NOT_FILED is NOT an onchain status; check GenLayer separately.'});
+        }catch{
+          respond(res,503,{error:'Original Base USDC transfer could not be independently reverified; no paid request or GenLayer write was attempted'});
+        }
+        return;
       }
       if(['/api/v2/x402/quote','/api/v2/x402/execute'].includes(url.pathname)){
         if(!v2Configured(process.env.GENLAYER_V2_CONTRACT_ADDRESS)){

@@ -21,7 +21,7 @@ test('owner-provided paid V2 packet has the exact existing canonical ID, never i
   assert.equal(acceptedV2Claim.amountAtomic,'10000');
 });
 test('resume existing V2 case fails closed without independent Base USDC verifier',async()=>{
-  await assert.rejects(restoreAcceptedV2Case({}),/Independent Base RPC verifier required/);
+  await assert.rejects(restoreAcceptedV2Case({}),/Independent Base RPC verifier is required/);
   await assert.rejects(restoreAcceptedV2Case({verifyTransfer:async()=>({
     ...validReceipt,payee:'0x'+'a'.repeat(40)
   }),rpcUrl:'https://sepolia.base.org'}),/Independent Base payment verification required/);

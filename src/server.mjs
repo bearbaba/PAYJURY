@@ -97,9 +97,15 @@ async function readGenLayerCase(caseId) {
     evidenceStatus:'CONTRACT_READBACK_ONLY_TX_FINALITY_NOT_INDEPENDENTLY_AUDITED',
     note:'Receipt finality and on-chain payment verification require separate checks.'};
 }
-export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
+export function createServer({rpcUrl=process.env.BASE_RPC_URL,
+  mainnetRpcUrl=process.env.BASE_MAINNET_RPC_URL,port=4173,
   caseReader=readGenLayerCaseRecord,verifyTransfer=verifyBaseUSDCTransfer,
+  inspectTransfer=inspectBaseUSDCTransfer,
   v2Reader=v2DefaultReader,v2TxReader=v2DefaultTxReader}={}) {
+  // Base RPCs MUST be network-specific. A Sepolia RPC cannot verify Base mainnet.
+  // Never silently fall back to the wrong chain or a paid API.
+  const rpcForNetwork=network=>network==='eip155:84532'?rpcUrl:
+    network==='eip155:8453'?mainnetRpcUrl:null;
   return http.createServer(async(req,res)=>{
     const url=new URL(req.url||'/', 'http://127.0.0.1');
     try {
@@ -107,7 +113,9 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
         const contract=process.env.GENLAYER_CONTRACT_ADDRESS;
         const v2=process.env.GENLAYER_V2_CONTRACT_ADDRESS;
         respond(res,200,{name:'PAYJURY',mode:'evidence-first',
-          paymentVerifierConfigured:Boolean(rpcUrl),genlayerReadConfigured:/^0x[0-9a-f]{40}$/i.test(contract||''),
+          paymentVerifierConfigured:Boolean(rpcUrl||mainnetRpcUrl),
+          baseSepoliaRpcConfigured:Boolean(rpcUrl),baseMainnetRpcConfigured:Boolean(mainnetRpcUrl),
+          genlayerReadConfigured:/^0x[0-9a-f]{40}$/i.test(contract||''),
           genlayerContractAddress:/^0x[0-9a-f]{40}$/i.test(contract||'')?contract:null,
           genlayerV2ContractAddress:v2Configured(v2)?v2:null,
           v2FilingEnabled:v2Configured(v2),
@@ -152,17 +160,79 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
         return;
       }
       if(req.method==='GET'&&url.pathname==='/api/inspect'){
-        if(!rpcUrl){respond(res,503,{error:'BASE_RPC_URL not configured; inspection unavailable'});return;}
         const network=url.searchParams.get('network')||'';
+        if(!V2_NETWORKS.has(network)){respond(res,422,{error:'Unsupported payment network'});return;}
+        const chosenRpc=rpcForNetwork(network);
+        if(!chosenRpc){respond(res,503,{error:'Base RPC for selected network not configured; inspection unavailable'});return;}
         const txHash=url.searchParams.get('txHash')||'';
-        const found=await inspectBaseUSDCTransfer({network,txHash},{rpcUrl});
+        const found=await inspectTransfer({network,txHash},{rpcUrl:chosenRpc});
         respond(res,200,found);return;
+      }
+      // Evidence-only acceptance of an EXISTING transfer. Nothing is paid,
+      // filed, adjudicated, delegated or signed through this endpoint.
+      if(req.method==='GET'&&url.pathname==='/api/v2/candidate'){
+        const contract=process.env.GENLAYER_V2_CONTRACT_ADDRESS;
+        if(!v2Configured(contract)){
+          respond(res,503,{error:'V2 contract not configured'});return;
+        }
+        const network=url.searchParams.get('network')||'';
+        const txHash=String(url.searchParams.get('txHash')||'').toLowerCase();
+        const claimant=String(url.searchParams.get('claimant')||'').toLowerCase();
+        if(!V2_NETWORKS.has(network)||!EVM_HASH.test(txHash)||!EVM_ADDRESS.test(claimant)){
+          respond(res,422,{error:'Invalid V2 payment candidate parameters'});return;
+        }
+        const chosenRpc=rpcForNetwork(network);
+        if(!chosenRpc){
+          respond(res,503,{error:'Base RPC for selected network not configured'});return;
+        }
+        let transfer;
+        try{
+          transfer=await inspectTransfer({network,txHash},{rpcUrl:chosenRpc});
+          if(transfer?.result!=='BASE_USDC_TRANSFER_DISCOVERED_AND_VERIFIED'||
+            String(transfer.network)!==network||String(transfer.txHash).toLowerCase()!==txHash||
+            !EVM_ADDRESS.test(transfer.payer||'')||!EVM_ADDRESS.test(transfer.payee||'')||
+            !/^[1-9][0-9]*$/.test(transfer.amountAtomic||'')||
+            Number(transfer.amountAtomic)>100000){
+            throw Error('Invalid Base USDC transfer verification');
+          }
+        }catch{
+          respond(res,422,{error:'Independent Base USDC transfer verification did not pass'});return;
+        }
+        try{
+          const payer=transfer.payer.toLowerCase();
+          const [authorized,filingStatus]=await Promise.all([
+            v2Reader({address:contract,functionName:'can_file_for',
+              args:[payer,network,txHash,claimant]}),
+            // Probe only: inspect transfer use without inventing a real case ID.
+            // filing_status checks the scoped transfer key in GenLayer V2.
+            v2Reader({address:contract,functionName:'filing_status',
+              args:['pj_'+'0'.repeat(32),network,txHash,transfer.asset,
+                payer,transfer.payee,transfer.amountAtomic,payer]})
+          ]);
+          if(typeof authorized!=='boolean'||
+             !['READY_REQUIRES_BASE_PROOF','TRANSFER_ALREADY_FILED','CASE_EXISTS'].includes(filingStatus)){
+            throw Error('Unexpected V2 readback');
+          }
+          const unused=filingStatus==='READY_REQUIRES_BASE_PROOF';
+          respond(res,200,{
+            result:unused&&authorized?'PAYMENT_VERIFIED_V2_FILING_PREFLIGHT_POSSIBLE':
+              unused?'PAYMENT_VERIFIED_V2_SIGNER_NOT_AUTHORIZED':'PAYMENT_VERIFIED_BUT_V2_ALREADY_FILED',
+            transfer,claimant,claimantAuthorized:authorized,
+            v2FilingStatus:filingStatus,unusedInV2:unused,readOnly:true,
+            signingPerformed:false,paymentPerformed:false,
+            warning:'Base USDC Transfer does not prove API delivery. Payer or on-chain delegate must authorize each real filing; no transaction is sent here.'
+          });
+        }catch{
+          respond(res,503,{error:'V2 authorization or payment reuse state could not be independently read; no filing was attempted'});return;
+        }
+        return;
       }
       if(req.method==='POST'&&url.pathname==='/api/verify'){
         const body=await jsonBody(req);
         const claim=validateClaim(body);
-        if(!rpcUrl){respond(res,503,{error:'BASE_RPC_URL not configured; no payment verification attempted'});return;}
-        const settlement=await verifyBaseUSDCTransfer(claim,{rpcUrl});
+        const chosenRpc=rpcForNetwork(claim.network);
+        if(!chosenRpc){respond(res,503,{error:'Base RPC for selected network not configured; no payment verification attempted'});return;}
+        const settlement=await verifyTransfer(claim,{rpcUrl:chosenRpc});
         const matched=body.paymentResponseHeader?
           decodeX402PaymentResponse(body.paymentResponseHeader,claim):null;
         respond(res,200,makeCasePacket(claim,settlement,matched));return;
@@ -182,7 +252,8 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
           respond(res,503,{error:'V2 contract not configured. Read-only v1 available.'});return;
         }
         try{
-          const tracked=await trackFiledCase(caseId,{readCase:id=>caseReader(id,address),verifyTransfer,rpcUrl});
+          const tracked=await trackFiledCase(caseId,{readCase:id=>caseReader(id,address),
+            verifyTransfer,rpcUrl,selectRpcUrl:rpcForNetwork});
           respond(res,200,{...tracked,contractVersion:version,
             contractAddress:/^0x[0-9a-f]{40}$/i.test(address||'')?address:null});
         }catch{

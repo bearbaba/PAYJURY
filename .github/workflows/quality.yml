@@ -28,9 +28,13 @@ jobs:
           node --check src/x402.mjs
           node --check src/server.mjs
           node --check scripts/inspect-x402-quote.mjs
+          node --check scripts/pay-x402-testnet.mjs
           node --check web/app.js
       - name: Offline unit tests and Python contract syntax
         run: npm run check
+      - name: Verify official x402 SDK buyer API exports without signing
+        run: |
+          node --input-type=module -e "import {x402Client} from '@x402/core/client'; import {ExactEvmScheme} from '@x402/evm/exact/client'; import {wrapFetchWithPayment} from '@x402/fetch'; if([x402Client,ExactEvmScheme,wrapFetchWithPayment].some(x=>typeof x!=='function'))process.exit(1)"
       - name: Block accidental committed secrets
         run: |
           test ! -f .env

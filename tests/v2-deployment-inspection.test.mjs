@@ -47,8 +47,9 @@ test('RPC code-read error cannot be misreported as source match',async()=>{
     getContractCode:async address=>{assert.equal(address,V2_ADDRESS);throw Error('GenLayer RPC -32603');},
     localSource:'different source'
   });
-  assert.equal(out.result,'V2_DEPLOY_AND_AUTHORIZATION_READBACK_PASS');
+  assert.equal(out.result,'V2_READBACK_PASS_SOURCE_UNVERIFIED');
   assert.equal(out.sourceIdentity,'UNVERIFIED');
+  assert.equal(out.sourceContentMatched,false);
   assert.ok(out.warnings.some(x=>x.startsWith('SOURCE_RPC_READ_UNAVAILABLE')));
   assert.ok(out.warnings.some(x=>x.startsWith('SOURCE_IDENTITY_NOT_PROVEN')));
 });
@@ -104,7 +105,9 @@ test('newline/BOM-only differences are classified but do not automatically autho
     getContractCode:async()=>deployed,localSource:local
   });
   assert.equal(result.sourceIdentity,'SOURCE_FORMAT_ONLY_DIFFERENCE');
-  assert.equal(result.result,'V2_NOT_READY_FOR_SIGNING');
+  assert.equal(result.result,'V2_DEPLOY_AND_AUTHORIZATION_FORMAT_ONLY_REVIEW_REQUIRED');
+  assert.equal(result.sourceContentMatched,true);
+  assert.equal(result.requiresManualWalletApproval,true);
 });
 test('a genuine source change reports the first difference without dumping whole contract',()=>{
   const local='from genlayer import *\nclass PayJuryV2: pass\n';
@@ -144,8 +147,10 @@ test('247 content lines: 246 CRLF delimiters versus 247 LF plus EOF newline yiel
     getContractCode:async address=>{assert.equal(address,V2_ADDRESS);return deployed;},
     localSource:local
   });
-  assert.equal(verified.result,'V2_NOT_READY_FOR_SIGNING');
+  assert.equal(verified.result,'V2_DEPLOY_AND_AUTHORIZATION_FORMAT_ONLY_REVIEW_REQUIRED');
   assert.equal(verified.sourceIdentity,'SOURCE_FORMAT_ONLY_DIFFERENCE');
+  assert.equal(verified.sourceContentMatched,true);
+  assert.equal(verified.requiresManualWalletApproval,true);
   assert.equal(verified.signedTransactions,0);
 });
 test('indentation or Python source text changes never pass format-only normalization',()=>{

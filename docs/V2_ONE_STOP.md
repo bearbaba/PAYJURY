@@ -57,3 +57,11 @@ npm run v2:verify
 ```
 
 Inspect `sourceDiagnosis.firstDifferentLine`, `sourceDiagnosis.encoding`, `sourceDiagnosis.localSha256` and `sourceDiagnosis.deployedSha256` before deciding next action. Preserve the existing deployment and V1 acceptance evidence. Only enable wallet signing after exact deployed source and authorization checks have passed independent review. Do not edit the deployed V2 contract: any genuinely different code would need separately reviewed source and explicit user-authorized deployment of a new version.
+
+## V2 source-difference follow-up — CRLF / terminal newline hypothesis
+
+The owner ran `v2:verify` after the SDK fix. Deployed bytes were **11,361**, local bytes **11,116** (difference **245**). The local file was **248 logical split lines**, the deployed result **247**, and the first differing location was beyond the final content line (an empty line at EOF). This pattern strongly suggests the 246 content-line separators became `CRLF` on deployment and one terminal `LF` was dropped. The evidence does not yet exclude other text changes; no transaction should be sent on this hypothesis alone.
+
+The improved comparer now removes **only** an optional UTF-8 BOM, CRLF versus LF line-ending conventions and terminal newline-only differences for a separate normalized comparison. It also prints `localNewlines`, `deployedNewlines`, and `normalizedSha256` alongside the deployed normalized hash. If the hashes agree while raw hashes differ, the source content matches within these narrowly specified formatting differences. It **does not** change the original raw source hashes or automatically enable V2 signing; the result remains `SOURCE_FORMAT_ONLY_DIFFERENCE` / `V2_NOT_READY_FOR_SIGNING` pending manual source review. Any changed Python code, indentation, inline whitespace, or internal blank line remains a real mismatch.
+
+Read-only next step: `git pull --ff-only && npm run v2:verify`. Preserve V2 deployment TX `0x1fd845e9574e6c0956d5fd03afac8c7c70e75ea6532d4095fae3aa1276045f98`. Do not redeploy or repeat the existing x402 payment merely to troubleshoot line endings.

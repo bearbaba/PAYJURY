@@ -48,7 +48,7 @@ export async function rawGenLayerRead(client,{address,functionName,args}){
   if(raw.length<5||raw.length>1600||raw.endsWith('00'))
     throw Error('Unsafe bare calldata would trigger legacy RPC parser');
   const rpc=await client.request({method:'gen_call',params:[{
-    type:'read',from:'0x'+'11'.repeat(20),to:address,
+    type:'read',from:client.account?.address||'0x'+'11'.repeat(20),to:address,
     data:raw,transaction_hash_variant:VARIANT
   }]});
   const code=rpc&&typeof rpc==='object'&&rpc.status?.code;

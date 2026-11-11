@@ -92,3 +92,29 @@ The website now uses two carefully separated paths:
 CSP remains tightly scoped: `connect-src 'self' https://studio.genlayer.com` (no wildcard origins). RPC and wallet errors are displayed with the failing stage, instead of unqualified `An unknown RPC error occurred`.
 
 **Acceptance after updating Codespaces:** `git pull --ff-only`; stop and restart `npm run dev` to rebuild `web/studio-wallet.bundle.js`; hard-refresh page; press **Connect GenLayer wallet**. Successful read preflight plus approved account/chain must display `Connected 0x... on GenLayer Studionet`. If network add/switch fails, inspect the stage-specific error, do not supply or expose seed/private keys. No V2 case TX or new payment is necessary for this acceptance step.
+
+## Actual GenLayer V2 authorization acceptance — 11 November 2026
+
+The owner supplied original GenLayer Explorer execution details and fresh local RPC state reads for a permission-only test on **deployed V2** `0x0a6171C6a580c58d999a251436CE7c63FFc3dc31`. Payer/signer was `0x4C7cb73aC8F8999af21cfc9fF4cF2333a9508Dcb`, delegate `0x2222222222222222222222222222222222222222`, payment network `eip155:84532`, and reference `0x840a6ddf18558c452b1f1cbdd0b200b83e0a3ace06b68a5356769aefbc46f2b7`. The reference was **synthetic, not a Base payment** and must never be filed as one.
+
+- Initially, `can_file_for(payer, network, ref, delegate)` returned `false` from the real V2 contract.
+- [Authorize TX](https://explorer-studio.genlayer.com/tx/0x87fe1daef62b203e6fe3bd470a4f09b95f73eb2838290901458a227f3c861538): `set_delegate(..., true)` from payer, `FINALIZED`, Consensus Accepted, **GenVM SUCCESS**, 0 GEN transfer; post-write read returned **`true`**.
+- [Revoke TX](https://explorer-studio.genlayer.com/tx/0xe87e736f91575e059f730ff4506499be2e76056b6dc1b72b1589d009faf6340c): `set_delegate(..., false)` from SAME payer for SAME network, reference and delegate, `FINALIZED`, Consensus Accepted, **GenVM SUCCESS**; post-write read returned **`false`**.
+
+This closes the **real on-chain delegation/revocation acceptance**, not the V2 file/adjudicate flow. No payment was made; the fake reference does not establish settlement.
+
+## Reuse existing SpendProof Base Mainnet x402 evidence without repaying
+
+A separate builder-owned [SpendProof](https://github.com/bearbaba/SpendProof/blob/main/docs/KITE_PAID_ACCEPTANCE.md) acceptance reported an already-paid **IP402 GeoIP GET** on **Base Mainnet (8453)**, not PAYJURY's historical Base Sepolia V1 purchase. Exact transaction: [`0xe3e247e6cc7f3cd740ed7cc814f7d39f39e21f38e1633de6677cfe68175921cd`](https://basescan.org/tx/0xe3e247e6cc7f3cd740ed7cc814f7d39f39e21f38e1633de6677cfe68175921cd). SpendProof operator evidence reports 0.01 official Base USDC (`10000` atomic), sender `0xEDC10586eC36dF06ef87429b14Cd577A7cb68456`, merchant `0xEd617F79201248Df99909fBde4269b6EEAEE39B6`, HTTP 200 and Kite `completed` activity. PAYJURY does **not** automatically trust those operator-reported results. It independently fetches the Base receipt with exact Transfer topics, verifies official USDC address/amount/confirmations, probes V2 `can_file_for` and the payment reference's prior-use status, *all read-only*.
+
+**One-time setup in Codespaces:** maintain `BASE_RPC_URL=https://sepolia.base.org` for V1, and set `BASE_MAINNET_RPC_URL=https://mainnet.base.org` as a separate variable in the private `.env`. Public Base RPC is rate-limited; use a stable provider for production. Restart `npm run dev`, then execute:
+
+```bash
+npm run v2:candidate
+```
+
+Expected **only if** independent receipt passes and V2 payment reference is unused: result will be `PAYMENT_VERIFIED_V2_SIGNER_NOT_AUTHORIZED` with `claimantAuthorized=false` for the user's connected GenLayer browser wallet `0x4C7c...8Dcb`, unless an additional *legitimate payer-signed on-chain authorization* has been recorded. If the Base receipt cannot be independently fetched, report it as unverified rather than success. The script does **not** sign, purchase, create a case or call OpenServ.
+
+**Critical signer boundary:** user confirms they controlled the **Kite Passport Gmail/passkey Approval** that authorized SpendProof's payment. This does not automatically establish the capability to sign as the exact onchain **Base payer** `0xEDC105...8456` on GenLayer. V2 accepts only (a) an EIP-1193 GenLayer wallet with `gl.message.sender_address` matching that Base payer address, or (b) a separately payer-signed onchain `set_delegate(network,tx_hash,delegate,true)`. An account login, passkey consent, wallet balance, API payment, or an arbitrary owner-signed delegation cannot substitute for those rules. **Do not export Kite/Passport credentials or reconstruct any agent private key to force matching addresses.** If the payer cannot sign GenLayer V2, stop here and use a different legitimately owned onchain payer payment or design a separately audited authorization mechanism; never bypass V2 onchain rules.
+
+After validated signed authority exists, prepare truthful terms/delivery data for the exact IP402 GeoIP GET, verify payment once more and obtain the deterministic V2 case ID from PAYJURY. A response/Activity log is *operator-observed evidence*, not an independent merchant-signed payload. Check `filing_status` again before one wallet-approved `file_case`. A successful receipt must be `FINALIZED` / GenVM SUCCESS and `get_case=FILED`. Only then sign `adjudicate_case(case_id)` ONCE, monitor finality, and independently read `get_case=DECIDED` plus actual verdict/reason. **No re-payment, no old V1 re-filing, no duplicate signatures on uncertain outcomes.**

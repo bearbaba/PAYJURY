@@ -111,3 +111,9 @@ npm run deploy:inspect
 ```
 
 This new script reads the *existing deployment transaction only*, checks whether the SDK returns FINALIZED/GenVM success, compares any exposed recipient/address, and never signs. A failed lookup is not proof the Explorer is wrong. A deploy PASS **does not** establish that the deployed source exactly matches GitHub or that PAYJURY adjudication has completed. See [acceptance evidence](docs/ACCEPTANCE.md).
+
+## New: read-only x402 payer preflight
+
+After configuring an explicit Base Sepolia provider, exact merchant and **a dedicated testnet wallet secret in Codespaces Secrets**, run `npm run pay:preflight` before any payment. It reads the real x402 V2 quote, checks `eth_chainId=84532`, queries the official test USDC `balanceOf`, and refuses to authorize signing if test USDC is less than 0.01, the merchant differs, or the network is wrong. Never paste secrets into the chat or commit them.
+
+The separately approved paid CLI now logs `PAYJURY_X402_REPORTED_SETTLEMENT` with a public transaction hash as soon as it receives a matching PAYMENT-RESPONSE, **before** limited read-only receipt polling. A pending confirmation does not trigger another signed payment. The one-shot marker remains permanent even if readback times out. See [live client runbook](docs/X402_LIVE_CLIENT.md).

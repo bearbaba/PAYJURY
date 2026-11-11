@@ -29,6 +29,8 @@ jobs:
           node --check src/server.mjs
           node --check scripts/inspect-x402-quote.mjs
           node --check scripts/pay-x402-testnet.mjs
+          node --check scripts/preflight-x402-payer.mjs
+          node --check src/testnet-payer-preflight.mjs
           node --check scripts/verify-genlayer-deployment.mjs
           node --check scripts/inspect-deploy-tx.mjs
           node --check web/app.js

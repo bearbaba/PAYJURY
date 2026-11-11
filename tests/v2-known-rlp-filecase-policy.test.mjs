@@ -28,7 +28,7 @@ test('known RPC RLP bug permits only exact case, same payer and independent can_
   assert.equal(d.allow,true);
   assert.equal(d.mode,'KNOWN_UPSTREAM_RLP_RECOVERY');
   assert.match(d.warning,/NOT VERIFIED/);
-  assert.match(d.warning,/may incur GenLayer fees/);
+  assert.match(d.warning,/can incur GenLayer fees/);
   for(const [key,value] of [
     ['caseId','pj_'+'b'.repeat(32)],['txHash','0x'+'c'.repeat(64)],
     ['payee','0x'+'b'.repeat(40)],['network','eip155:8453'],

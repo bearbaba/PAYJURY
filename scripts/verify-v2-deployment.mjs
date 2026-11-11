@@ -34,9 +34,19 @@ function sourceEncoding(deployed){
   return {code:deployed,encoding:'SOURCE_TEXT'};
 }
 function normalizedSource(source){
-  // Only used to classify obvious formatting differences, never to
-  // silently certify byte-for-byte source identity.
-  return source.replace(/^\ufeff/,'').replace(/\r\n?/g,'\n').replace(/\n+$/,'\n');
+  // Classify BOM + CRLF/CR + optional terminal blank lines only.
+  // Do not remove indentation, spaces inside code, comments or other text.
+  // This is NOT byte-for-byte source authentication.
+  return source.replace(/^\ufeff/,'').replace(/\r\n?/g,'\n').replace(/\n+$/,'');
+}
+function newlineProfile(source){
+  const crlf=(source.match(/\r\n/g)||[]).length;
+  const allLf=(source.match(/\n/g)||[]).length;
+  return {
+    crlf,lf:allLf-crlf,crOnly:(source.match(/\r(?!\n)/g)||[]).length,
+    endsWithNewline:/[\r\n]$/.test(source),
+    leadingBom:source.startsWith('\ufeff')
+  };
 }
 const byteLength=source=>Buffer.byteLength(source,'utf8');
 const limitedLine=value=>{
@@ -52,8 +62,10 @@ export function compareV2Source(deployed,local){
     localSha256:sha256(local),deployedSha256:null,firstDifferentLine:null
   };
   const actual=parsed.code;
-  const localLines=local.replace(/\r\n?/g,'\n').split('\n');
-  const deployedLines=actual.replace(/\r\n?/g,'\n').split('\n');
+  const localLines=normalizedSource(local).split('\n');
+  const deployedLines=normalizedSource(actual).split('\n');
+  // Normalization removes only line-ending format and terminal newlines.
+  // This compares meaningful line CONTENT, not an empty line beyond EOF.
   const firstIdx=Array.from({length:Math.max(localLines.length,deployedLines.length)})
     .findIndex((_,idx)=>localLines[idx]!==deployedLines[idx]);
   const exact=actual===local;
@@ -69,10 +81,14 @@ export function compareV2Source(deployed,local){
     encoding:parsed.encoding,localBytes:byteLength(local),
     deployedBytes:byteLength(actual),
     localSha256:sha256(local),deployedSha256:sha256(actual),
-    localLineCount:localLines.length,deployedLineCount:deployedLines.length,
+    localLineCount:local.replace(/\r\n?/g,'\n').split('\n').length,
+    deployedLineCount:actual.replace(/\r\n?/g,'\n').split('\n').length,
+    normalizedSha256:sha256(normalizedSource(local)),
+    deployedNormalizedSha256:sha256(normalizedSource(actual)),
+    localNewlines:newlineProfile(local),deployedNewlines:newlineProfile(actual),
     firstDifferentLine:safePreview,
     note:exact?'Exact source text matches after any explicit Base64 transport decoding.':
-      formattingOnly?'Only BOM, newline conventions or terminal blank lines differ. Exact deployed-source bytes still not matched.':
+      formattingOnly?'Content matches after strict BOM/newline normalization. Original deployed-source bytes differ; exact text identity is not proven.':
       'Deployed code differs from repository source. Compare the first differing line and audit the Studio source before signing.'
   };
 }

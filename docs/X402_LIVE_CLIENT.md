@@ -18,6 +18,8 @@ npm run quote
 
 Confirm the resulting `X402_QUOTE_INSPECTED_NOT_PAID` includes the exact intended `payee`, network `eip155:84532`, official USDC and amount `10000`. There is no wallet operation at this stage.
 
+Before payment, run **`npm run pay:preflight`** using a dedicated Base Sepolia testnet wallet configured privately. It must report `X402_TESTNET_PAYER_READY_NO_SIGNATURE`, confirming the exact merchant quote, official USDC balance **at least 10000 atomic units**, and RPC chain ID 84532. This command does **not** authorize or sign anything. The testnet wallet address is public; the secret must never be printed.
+
 ## Explicitly authorized paid acceptance — not automatic
 
 After reviewing and approving a **single testnet transaction**, set the one-shot confirmation environment variable and run:
@@ -27,6 +29,8 @@ PAYJURY_CONFIRM_ONE_PAYMENT=I_APPROVE_ONE_TESTNET_X402_PAYMENT npm run pay:testn
 ```
 
 This performs another initial GET; it is not guaranteed that a provider will repeat the same quote. The SDK payment policy rejects all newly proposed requirements except exactly the approved payee, network, token, amount, scheme, and EIP-3009 method. A local `.payjury-payment-attempt-<id>.lock` is written **before the paid request**. If the request fails, times out, or yields no receipt: **never remove the lock or retry blindly**; on-chain settlement might already have happened.
+
+The CLI first logs `PAYJURY_X402_REPORTED_SETTLEMENT` with the public transaction hash, immediately after validating the merchant's settlement header. **This is still UNVERIFIED** until on-chain confirmation; keep this hash even if the RPC is temporarily slow. It then retries **only read-only receipt queries**, never the payment, for a bounded window. Do not remove the permanent lock or rerun the payment if confirmation fails.
 
 The CLI accepts success only after a matching `PAYMENT-RESPONSE` header and an independent `eth_getTransactionReceipt` showing successful exact official USDC Transfer from the dedicated buyer to the approved recipient with **two Base Sepolia confirmations**. Its final log emits a public transaction hash, confirmations and a **SHA-256 of the HTTP response body**, not raw response content or signing key. A returned HTTP 200 alone is not accepted as payment proof.
 

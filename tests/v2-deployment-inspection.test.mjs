@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  verifyV2ReadOnly,V2_ADDRESS,V2_DEPLOY_TX,V2_MARKER
+  verifyV2ReadOnly,compareV2Source,V2_ADDRESS,V2_DEPLOY_TX,V2_MARKER
 } from '../scripts/verify-v2-deployment.mjs';
 const expectedTx={
   hash:V2_DEPLOY_TX,statusName:'FINALIZED',
@@ -83,4 +83,42 @@ test('method read failures are not a reason to redeploy',async()=>{
   assert.equal(out.version,null);
   assert.equal(out.payerCanFile,null);
   assert.ok(out.warnings.some(x=>x.startsWith('V2_METHOD_READ_UNAVAILABLE')));
+});
+
+test('Base64 transport decoding can prove identical Python source bytes',()=>{
+  const source='# {"Depends": "py-genlayer"}\nfrom genlayer import *\nclass PayJuryV2: pass\n';
+  const diagnosed=compareV2Source(Buffer.from(source,'utf8').toString('base64'),source);
+  assert.equal(diagnosed.result,'SOURCE_TEXT_MATCHED');
+  assert.equal(diagnosed.encoding,'BASE64_TRANSPORT');
+  assert.equal(diagnosed.firstDifferentLine,null);
+  assert.equal(diagnosed.deployedSha256,diagnosed.localSha256);
+});
+test('newline/BOM-only differences are classified but do not automatically authorize V2',async()=>{
+  const local='from genlayer import *\nclass PayJuryV2: pass\n';
+  const deployed='\\ufefffrom genlayer import *\r\nclass PayJuryV2: pass\r\n\r\n';
+  const diagnosed=compareV2Source(deployed,local);
+  assert.equal(diagnosed.result,'SOURCE_FORMAT_ONLY_DIFFERENCE');
+  assert.notEqual(diagnosed.deployedSha256,diagnosed.localSha256);
+  const result=await verifyV2ReadOnly({
+    getTransaction:async()=>expectedTx,readContract:v2Reads,
+    getContractCode:async()=>deployed,localSource:local
+  });
+  assert.equal(result.sourceIdentity,'SOURCE_FORMAT_ONLY_DIFFERENCE');
+  assert.equal(result.result,'V2_NOT_READY_FOR_SIGNING');
+});
+test('a genuine source change reports the first difference without dumping whole contract',()=>{
+  const local='from genlayer import *\nclass PayJuryV2: pass\n';
+  const deployed='from genlayer import *\nclass PayJuryV2: risk\n';
+  const diagnosed=compareV2Source(deployed,local);
+  assert.equal(diagnosed.result,'SOURCE_TEXT_MISMATCH');
+  assert.equal(diagnosed.firstDifferentLine.number,2);
+  assert.equal(diagnosed.firstDifferentLine.local,'class PayJuryV2: pass');
+  assert.equal(diagnosed.firstDifferentLine.deployed,'class PayJuryV2: risk');
+  assert.equal(diagnosed.localLineCount,3);
+  assert.equal(diagnosed.deployedLineCount,3);
+});
+test('missing contract code remains unverified, not declared source matched',()=>{
+  const info=compareV2Source(null,'from genlayer import *');
+  assert.equal(info.result,'UNVERIFIED');
+  assert.equal(info.deployedSha256,null);
 });

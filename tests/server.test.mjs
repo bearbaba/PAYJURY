@@ -56,3 +56,14 @@ test('missing GenLayer deployment must never synthesize a verdict',async()=>{
     assert.match((await res.json()).error,/not independently readable/);
   });
 });
+
+test('payment auto-fill API refuses execution if Base RPC is not configured',async()=>{
+  await serve(async base=>{
+    const txHash='0x'+'a'.repeat(64);
+    const res=await fetch(base+'/api/inspect?network=eip155:84532&txHash='+txHash);
+    assert.equal(res.status,503);
+    assert.match((await res.json()).error,/BASE_RPC_URL not configured/);
+    const html=await (await fetch(base+'/')).text();
+    assert.match(html,/id="autofill-transfer"/);
+  });
+});

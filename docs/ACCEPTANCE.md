@@ -58,3 +58,15 @@
 The repository now includes `contracts/PayJuryV2.py` with payer-only direct filing or payer-signed, payment-scoped, revocable delegate authorization. It recomputes case IDs from canonical fields and permits at most one case per referenced transfer **within V2**. It also adds a guarded EIP-1193 wallet workflow to the same website, disabled until a verified V2 contract address exists. Offline security tests are not evidence of V2 deployment or successful wallet writes.
 
 **V2 live acceptance is NOT complete.** Verify actual deploy/GenVM result, authorize/deauthorize from the payer account, reject an unauthorized signer, file exactly one new legitimate case, then check persisted verdict readback. Do not reuse the completed V1 payment or do speculative x402 signing. [Acceptance runbook](V2_ONE_STOP.md).
+
+## Addendum — GenLayer V2 real on-chain delegation acceptance (2026-11-11)
+
+Deployed V2 `0x0a6171C6a580c58d999a251436CE7c63FFc3dc31` already passed read-only deployment, source-content comparison and browser wallet connection checks. The owner then completed **real GenLayer V2 onchain permission changes**, scoped only to a clearly synthetic reference (NOT a paid Base transfer):
+
+| Stage | Evidence | Actual result |
+| --- | --- | --- |
+| Before grant | Contract `can_file_for` read | `false` |
+| Grant `set_delegate(...,true)` | [TX `0x87fe1dae...c861538`](https://explorer-studio.genlayer.com/tx/0x87fe1daef62b203e6fe3bd470a4f09b95f73eb2838290901458a227f3c861538) | FINALIZED / GenVM SUCCESS; readback **`true`** |
+| Revoke `set_delegate(...,false)` | [TX `0xe87e736f...faf6340c`](https://explorer-studio.genlayer.com/tx/0xe87e736f91575e059f730ff4506499be2e76056b6dc1b72b1589d009faf6340c) | FINALIZED / GenVM SUCCESS; readback **`false`** |
+
+**V2 File Case → AI Adjudication → DECIDED is still NOT live accepted.** Existing independent Base Mainnet payment candidate has been identified in the user's SpendProof [Kite paid acceptance](https://github.com/bearbaba/SpendProof/blob/main/docs/KITE_PAID_ACCEPTANCE.md). PAYJURY `npm run v2:candidate` independently inspects its actual Base USDC transfer and V2 permission/reuse state without any payment or signing. Kite Passport Gmail/passkey Approval alone is NOT the same as EIP-1193 payer EOA signing authority enforced in V2. Do not report a real filing or AI verdict until final signed TX evidence and `get_case` readbacks exist.

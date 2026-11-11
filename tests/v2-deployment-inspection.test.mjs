@@ -122,3 +122,37 @@ test('missing contract code remains unverified, not declared source matched',()=
   assert.equal(info.result,'UNVERIFIED');
   assert.equal(info.deployedSha256,null);
 });
+
+test('247 content lines: 246 CRLF delimiters versus 247 LF plus EOF newline yields exact 245-byte mismatch',async()=>{
+  const lines=Array.from({length:247},(_,i)=>'# source code line '+i);
+  const local=lines.join('\n')+'\n';
+  const deployed=lines.join('\r\n');
+  const result=compareV2Source(deployed,local);
+  assert.equal(result.deployedBytes-result.localBytes,245);
+  assert.equal(result.localLineCount,248);
+  assert.equal(result.deployedLineCount,247);
+  assert.equal(result.result,'SOURCE_FORMAT_ONLY_DIFFERENCE');
+  assert.equal(result.firstDifferentLine,null);
+  assert.equal(result.localNewlines.lf,247);
+  assert.equal(result.deployedNewlines.crlf,246);
+  assert.equal(result.localNewlines.endsWithNewline,true);
+  assert.equal(result.deployedNewlines.endsWithNewline,false);
+  assert.equal(result.normalizedSha256,result.deployedNormalizedSha256);
+  assert.notEqual(result.localSha256,result.deployedSha256);
+  const verified=await verifyV2ReadOnly({
+    getTransaction:async()=>expectedTx,readContract:v2Reads,
+    getContractCode:async address=>{assert.equal(address,V2_ADDRESS);return deployed;},
+    localSource:local
+  });
+  assert.equal(verified.result,'V2_NOT_READY_FOR_SIGNING');
+  assert.equal(verified.sourceIdentity,'SOURCE_FORMAT_ONLY_DIFFERENCE');
+  assert.equal(verified.signedTransactions,0);
+});
+test('indentation or Python source text changes never pass format-only normalization',()=>{
+  const original='from genlayer import *\nclass PayJuryV2:\n  def file_case(self):\n    return False\n';
+  const altered='from genlayer import *\r\nclass PayJuryV2:\r\n  def file_case(self):\r\n    return True';
+  const diagnosis=compareV2Source(altered,original);
+  assert.equal(diagnosis.result,'SOURCE_TEXT_MISMATCH');
+  assert.equal(diagnosis.firstDifferentLine.number,4);
+  assert.notEqual(diagnosis.normalizedSha256,diagnosis.deployedNormalizedSha256);
+});

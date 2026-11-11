@@ -102,28 +102,27 @@ async function confirmV2WalletBeforeWrite(address,fn,args){
   if(network!==STUDIO_CHAIN_ID)
     throw Error('Wallet is not on GenLayer Studionet 61999. Reconnect GenLayer wallet; never sign on Base Sepolia.');
 }
-// Fee estimate is not a signed transaction. It MUST complete before the
-// persistent one-shot WRITE lock is created, otherwise an RPC estimation
-// failure can falsely lock an operation which was never sent to the wallet.
-export async function estimateV2WriteFees(address,fn,args){
+// This repository pins genlayer-js 1.1.8. That SDK HAS writeContract()
+// but does NOT implement estimateTransactionFeesForWrite() or its fees option.
+// Perform a real wallet/account/chain capability check BEFORE creating the
+// persistent one-shot transaction lock. The wallet handles actual signing.
+export async function preflightV2Write(address,fn,args){
   await confirmV2WalletBeforeWrite(address,fn,args);
-  const quote=await writeClient.estimateTransactionFeesForWrite({
-    address,functionName:fn,args
-  });
-  if(!quote?.distribution||quote.feeValue===undefined||quote.feeValue===null)
-    throw Error('GenLayer fee estimation did not return a usable quote. No transaction was signed.');
-  return {distribution:quote.distribution,feeValue:quote.feeValue};
+  if(typeof writeClient.writeContract!=='function')
+    throw Error('Installed GenLayer SDK has no supported writeContract method. No signature requested.');
+  // SDK v1.1.8 expects {address,functionName,args,value}. No unsupported
+  // fees field, no arbitrary user value, no automated signing or replay.
+  return Object.freeze({address,functionName:fn,args,value:0n});
 }
-export async function sendV2Write(address,fn,args,estimatedFees){
-  await confirmV2WalletBeforeWrite(address,fn,args);
-  if(!estimatedFees?.distribution||estimatedFees.feeValue===undefined||
-     estimatedFees.feeValue===null)
-    throw Error('GenLayer fee preflight was not completed; signing refused');
-  // The frontend creates the one-shot persistent lock immediately before
-  // this action. Only the user's connected wallet can authorize broadcast.
-  const hash=await writeClient.writeContract({
-    address,functionName:fn,args,fees:estimatedFees
-  });
+export async function sendV2Write(address,fn,args,preparedWrite){
+  if(!preparedWrite||preparedWrite.address!==address||
+     preparedWrite.functionName!==fn||preparedWrite.args!==args||
+     preparedWrite.value!==0n)
+    throw Error('GenLayer wallet write preflight did not match the approved action');
+  // The caller already checked wallet, network, payer, exact case/payment
+  // and created the permanent one-shot lock immediately BEFORE this call.
+  // No automatic retry even if the provider returns an uncertain outcome.
+  const hash=await writeClient.writeContract(preparedWrite);
   if(typeof hash!=='string'||!TX.test(hash))
     throw Error('GenLayer returned an invalid transaction ID; outcome is uncertain');
   return hash;

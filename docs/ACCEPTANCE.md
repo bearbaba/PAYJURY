@@ -39,3 +39,7 @@ Base USDC transfers are EVM `eth_*` transactions (Base Sepolia ID 84532 or Base 
 ## Candidate address provided 11 Nov 2026
 
 The operator provided a GenLayer Studio import URL containing the **candidate** address `0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8` on Studionet (61999). This is **not yet confirmed deployed or source-matched** solely from the URL. Run `npm run contract:verify` after `git pull --ff-only` in Codespaces. The read-only probe checks `gen_getContractCode` against **finalized** chain state, then SHA-256 compares the decoded source to `contracts/PayJury.py` (normalizing line endings). If it reports `SOURCE_MATCHED_FINALIZED_STATE`, still collect the actual deploy transaction hash and independently inspect `FINALIZED` and GenVM `SUCCESS` before marking deployment accepted. A mismatched source must not be configured in the web.
+
+### Deployment read diagnostic classification
+
+The initial read-only probe for the candidate address returned a generic `PAYJURY_DEPLOYMENT_UNVERIFIED` in Codespaces. The original script suppressed every underlying error and this result cannot distinguish a missing contract from transport or provider problems. The updated probe prints only safe `errorCode`, numeric HTTP status and numeric RPC error code. **Do not redeploy or sign based solely on this message**; inspect the original deployment TX hash in the official Explorer. No live GenLayer deploy or case adjudication has yet been independently verified by this project.

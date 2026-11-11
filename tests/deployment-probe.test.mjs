@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {
-  PROPOSED_ADDRESS,STUDIO_RPC,normalizedSource,analyzeContractSource,probePayJury
+  PROPOSED_ADDRESS,STUDIO_RPC,normalizedSource,analyzeContractSource,probePayJury,DeploymentProbeError
 } from '../scripts/verify-genlayer-deployment.mjs';
 const localSource=await readFile(new URL('../contracts/PayJury.py',import.meta.url),'utf8');
 const b64=x=>Buffer.from(x,'utf8').toString('base64');
@@ -46,7 +46,32 @@ test('RPC error and unsupported endpoints cannot produce a match',async()=>{
     fetchImpl:async()=>{throw Error('must not be called');}
   }),/Only official/);
   await assert.rejects(probePayJury({localSource,
-    fetchImpl:async()=>({ok:true,json:async()=>({error:{code:-32000,message:'unavailable'}})})}),/did not return/);
+    fetchImpl:async()=>({ok:true,json:async()=>({error:{code:-32000,message:'unavailable'}})})}),error=>error instanceof DeploymentProbeError && error.code==='RPC_REJECTED_FINALIZED_CODE_READ' && error.rpcCode===-32000);
   await assert.rejects(probePayJury({localSource,
-    fetchImpl:async()=>({ok:false,status:503})}),/HTTP unavailable/);
+    fetchImpl:async()=>({ok:false,status:503})}),error=>error instanceof DeploymentProbeError && error.code==='RPC_HTTP_ERROR' && error.httpStatus===503);
+});
+
+test('probe classifies unsupported method without showing raw provider text',async()=>{
+  await assert.rejects(probePayJury({localSource,
+    fetchImpl:async()=>({ok:true,json:async()=>({error:{
+      code:-32601,message:'secret-api-key-must-not-print'
+    }})})}),
+    error=>error instanceof DeploymentProbeError &&
+      error.code==='RPC_METHOD_UNSUPPORTED'&&error.rpcCode===-32601&&
+      !error.message.includes('secret-api-key')
+  );
+});
+test('probe distinguishes network timeouts, invalid JSON and empty finalized result',async()=>{
+  await assert.rejects(probePayJury({localSource,
+    fetchImpl:async()=>{throw Object.assign(new Error('full endpoint is private'),{name:'TimeoutError'});}}),
+    error=>error instanceof DeploymentProbeError && error.code==='RPC_TIMEOUT'
+  );
+  await assert.rejects(probePayJury({localSource,
+    fetchImpl:async()=>({ok:true,json:async()=>{throw Error('non-JSON body with credentials');}})}),
+    error=>error instanceof DeploymentProbeError && error.code==='RPC_INVALID_JSON'
+  );
+  await assert.rejects(probePayJury({localSource,
+    fetchImpl:async()=>({ok:true,json:async()=>({result:null})})}),
+    error=>error instanceof DeploymentProbeError && error.code==='RPC_CODE_RESULT_MISSING'
+  );
 });

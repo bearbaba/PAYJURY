@@ -27,7 +27,7 @@ function sourceEncoding(deployed){
     try{
       const decoded=Buffer.from(text,'base64').toString('utf8');
       // A GenLayer Python source starts with its depends header, an import or a class.
-      if(/^(?:\\ufeff)?(?:#|from |import |class |@)/.test(decoded))
+      if(/^(?:\ufeff)?(?:#|from |import |class |@)/.test(decoded))
         return {code:decoded,encoding:'BASE64_TRANSPORT'};
     }catch{}
   }
@@ -36,13 +36,13 @@ function sourceEncoding(deployed){
 function normalizedSource(source){
   // Only used to classify obvious formatting differences, never to
   // silently certify byte-for-byte source identity.
-  return source.replace(/^\\ufeff/,'').replace(/\\r\\n?/g,'\\n').replace(/\\n+$/,'\\n');
+  return source.replace(/^\ufeff/,'').replace(/\r\n?/g,'\n').replace(/\n+$/,'\n');
 }
 const byteLength=source=>Buffer.byteLength(source,'utf8');
 const limitedLine=value=>{
   // Public source diagnostics: short snippets only; never dump entire code.
   const line=String(value||'').slice(0,130);
-  return line.replace(/[\\r\\n\\t]/g,' ');
+  return line.replace(/[\r\n\t]/g,' ');
 };
 export function compareV2Source(deployed,local){
   if(typeof local!=='string'||!local.length)throw Error('Local V2 source required');
@@ -52,8 +52,8 @@ export function compareV2Source(deployed,local){
     localSha256:sha256(local),deployedSha256:null,firstDifferentLine:null
   };
   const actual=parsed.code;
-  const localLines=local.replace(/\\r\\n?/g,'\\n').split('\\n');
-  const deployedLines=actual.replace(/\\r\\n?/g,'\\n').split('\\n');
+  const localLines=local.replace(/\r\n?/g,'\n').split('\n');
+  const deployedLines=actual.replace(/\r\n?/g,'\n').split('\n');
   const firstIdx=Array.from({length:Math.max(localLines.length,deployedLines.length)})
     .findIndex((_,idx)=>localLines[idx]!==deployedLines[idx]);
   const exact=actual===local;

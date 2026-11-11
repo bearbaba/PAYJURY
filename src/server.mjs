@@ -6,6 +6,7 @@ import {validateClaim,verifyBaseUSDCTransfer,inspectBaseUSDCTransfer,decodeX402P
 import {trackFiledCase} from './case-tracker.mjs';
 import {serveV2X402} from './v2-x402-relay.mjs';
 import {restoreAcceptedV2Case} from './v2-known-case.mjs';
+import {summarizeV2ReadOnlyTx} from './genlayer-v2-tx-outcome.mjs';
 import {isGenLayerOverlongRlpError} from './v2-raw-read.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
@@ -74,18 +75,6 @@ async function v2DefaultTxReader({hash}){
   const client=await genlayerReadClient();
   return client.getTransaction({hash});
 }
-function summarizeV2ReadOnlyTx(tx,hash){
-  const status=String(tx?.statusName||'UNKNOWN').toUpperCase();
-  const execution=String(tx?.txExecutionResultName||'UNKNOWN').toUpperCase();
-  const normalizedExecution=execution.replace(/[^A-Z]/g,'');
-  const resultCode=typeof tx?.txExecutionResult==='bigint'?
-    Number(tx.txExecutionResult):tx?.txExecutionResult;
-  const finalized=status==='FINALIZED';
-  return {hash,status,execution,finalized,
-    success:finalized&&(normalizedExecution==='FINISHEDWITHRETURN'||resultCode===1),
-    note:'GenLayer transaction lookup is read-only. No retries or writes performed.'};
-}
-
 async function readGenLayerCaseRecord(caseId, contractAddress=process.env.GENLAYER_CONTRACT_ADDRESS) {
   if(!/^pj_[0-9a-f]{32}$/.test(caseId))throw Error('Invalid case ID');
   const address=contractAddress;
@@ -202,7 +191,8 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
         if(!EVM_HASH.test(hash)){respond(res,422,{error:'Invalid transaction hash'});return;}
         try{
           const tx=await v2TxReader({hash});
-          if(tx?.hash&&String(tx.hash).toLowerCase()!==hash.toLowerCase()){
+          const observedHash=tx?.hash||tx?.txId;
+          if(observedHash&&String(observedHash).toLowerCase()!==hash.toLowerCase()){
             respond(res,503,{error:'GenLayer transaction hash mismatch; state unverified'});return;
           }
           respond(res,200,summarizeV2ReadOnlyTx(tx,hash));

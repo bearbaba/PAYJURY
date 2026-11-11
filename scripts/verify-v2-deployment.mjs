@@ -16,14 +16,71 @@ const TEST_PAYER='0x'+'1'.repeat(40);
 const TEST_STRANGER='0x'+'2'.repeat(40);
 const TEST_TX='0x'+'a'.repeat(64);
 const sha256=text=>createHash('sha256').update(text,'utf8').digest('hex');
-function exactSourceMatch(deployed,local){
-  if(typeof deployed!=='string'||!deployed.trim())return null;
-  return deployed===local||deployed.replace(/\r\n/g,'\n')===local.replace(/\r\n/g,'\n');
+function sourceEncoding(deployed){
+  // SDK usually returns Python source. If it returns a Base64 transport value,
+  // decode ONLY an unambiguous Base64 envelope (and keep the raw SHA-256).
+  if(typeof deployed!=='string'||!deployed.trim())
+    return {code:null,encoding:'UNAVAILABLE'};
+  const text=deployed.trim();
+  if(text.length>=32&&text.length%4===0&&
+     /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(text)){
+    try{
+      const decoded=Buffer.from(text,'base64').toString('utf8');
+      // A GenLayer Python source starts with its depends header, an import or a class.
+      if(/^(?:\ufeff)?(?:#|from |import |class |@)/.test(decoded))
+        return {code:decoded,encoding:'BASE64_TRANSPORT'};
+    }catch{}
+  }
+  return {code:deployed,encoding:'SOURCE_TEXT'};
+}
+function normalizedSource(source){
+  // Only used to classify obvious formatting differences, never to
+  // silently certify byte-for-byte source identity.
+  return source.replace(/^\ufeff/,'').replace(/\r\n?/g,'\n').replace(/\n+$/,'\n');
+}
+const byteLength=source=>Buffer.byteLength(source,'utf8');
+const limitedLine=value=>{
+  // Public source diagnostics: short snippets only; never dump entire code.
+  const line=String(value||'').slice(0,130);
+  return line.replace(/[\r\n\t]/g,' ');
+};
+export function compareV2Source(deployed,local){
+  if(typeof local!=='string'||!local.length)throw Error('Local V2 source required');
+  const parsed=sourceEncoding(deployed);
+  if(!parsed.code)return {
+    result:'UNVERIFIED',encoding:parsed.encoding,localBytes:byteLength(local),
+    localSha256:sha256(local),deployedSha256:null,firstDifferentLine:null
+  };
+  const actual=parsed.code;
+  const localLines=local.replace(/\r\n?/g,'\n').split('\n');
+  const deployedLines=actual.replace(/\r\n?/g,'\n').split('\n');
+  const firstIdx=Array.from({length:Math.max(localLines.length,deployedLines.length)})
+    .findIndex((_,idx)=>localLines[idx]!==deployedLines[idx]);
+  const exact=actual===local;
+  const formattingOnly=!exact&&normalizedSource(actual)===normalizedSource(local);
+  const safePreview=firstIdx>=0?{
+    number:firstIdx+1,
+    local:limitedLine(localLines[firstIdx]),
+    deployed:limitedLine(deployedLines[firstIdx]),
+  }:null;
+  return {
+    result:exact?'SOURCE_TEXT_MATCHED':
+      formattingOnly?'SOURCE_FORMAT_ONLY_DIFFERENCE':'SOURCE_TEXT_MISMATCH',
+    encoding:parsed.encoding,localBytes:byteLength(local),
+    deployedBytes:byteLength(actual),
+    localSha256:sha256(local),deployedSha256:sha256(actual),
+    localLineCount:localLines.length,deployedLineCount:deployedLines.length,
+    firstDifferentLine:safePreview,
+    note:exact?'Exact source text matches after any explicit Base64 transport decoding.':
+      formattingOnly?'Only BOM, newline conventions or terminal blank lines differ. Exact deployed-source bytes still not matched.':
+      'Deployed code differs from repository source. Compare the first differing line and audit the Studio source before signing.'
+  };
 }
 export async function verifyV2ReadOnly({getTransaction,readContract,getContractCode,localSource}){
   if(typeof getTransaction!=='function'||typeof readContract!=='function')throw Error('Read-only GenLayer SDK methods required');
   const out={address:V2_ADDRESS,deployTx:V2_DEPLOY_TX,chainId:61999,
     sourceIdentity:'UNVERIFIED',sourceSha256:typeof localSource==='string'?sha256(localSource):null,
+    sourceDiagnosis:null,
     version:null,payerCanFile:null,strangerCanFile:null,
     deployment:null,warnings:[],signedTransactions:0};
   try{
@@ -48,22 +105,25 @@ export async function verifyV2ReadOnly({getTransaction,readContract,getContractC
       // genlayer-js getContractCode expects the Address STRING, not {address}.
       // Passing an object makes the RPC backend receive a dict as its ID.
       const code=await getContractCode(V2_ADDRESS);
-      const matched=exactSourceMatch(code,localSource);
-      if(matched===true)out.sourceIdentity='SOURCE_TEXT_MATCHED';
-      else if(matched===false)out.sourceIdentity='SOURCE_TEXT_MISMATCH';
-      else out.warnings.push('SOURCE_CODE_NOT_RETURNED');
+      out.sourceDiagnosis=compareV2Source(code,localSource);
+      out.sourceIdentity=out.sourceDiagnosis.result;
+      if(out.sourceIdentity==='UNVERIFIED')out.warnings.push('SOURCE_CODE_NOT_RETURNED');
+      if(out.sourceIdentity==='SOURCE_FORMAT_ONLY_DIFFERENCE')
+        out.warnings.push('SOURCE_FORMAT_ONLY_DIFFERENCE: review and approve the exact differing bytes before enabling V2 signing.');
     }catch{
       out.warnings.push('SOURCE_RPC_READ_UNAVAILABLE: This is not evidence of a failed deployment.');
     }
   }
   const successfulTx=out.deployment?.result==='FINALIZED_GENVM_SUCCESS_ADDRESS_MATCHED';
   const correctMethods=out.version===V2_MARKER&&out.payerCanFile===true&&out.strangerCanFile===false;
-  out.result=successfulTx&&correctMethods&&out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'?
+  out.result=successfulTx&&correctMethods&&out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'&&out.sourceIdentity!=='SOURCE_FORMAT_ONLY_DIFFERENCE'?
     'V2_DEPLOY_AND_AUTHORIZATION_READBACK_PASS':correctMethods&&
-      out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'?
+      out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'&&out.sourceIdentity!=='SOURCE_FORMAT_ONLY_DIFFERENCE'?
       'V2_METHODS_PASS_DEPLOY_TX_READ_UNCONFIRMED':'V2_NOT_READY_FOR_SIGNING';
   if(out.sourceIdentity==='SOURCE_TEXT_MISMATCH')
     out.warnings.push('SOURCE_MISMATCH: do not enable signing. Confirm deployed source independently.');
+  if(out.sourceIdentity==='SOURCE_FORMAT_ONLY_DIFFERENCE')
+    out.warnings.push('BYTE_EXACT_IDENTITY_NOT_PROVEN: do not enable signing based only on normalized text.');
   if(out.sourceIdentity==='UNVERIFIED')
     out.warnings.push('SOURCE_IDENTITY_NOT_PROVEN: version marker and authorization methods are not byte-for-byte proof of deployed source.');
   out.next=out.result==='V2_DEPLOY_AND_AUTHORIZATION_READBACK_PASS'?

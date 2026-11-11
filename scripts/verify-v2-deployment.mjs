@@ -45,7 +45,9 @@ export async function verifyV2ReadOnly({getTransaction,readContract,getContractC
   }
   if(typeof getContractCode==='function'&&typeof localSource==='string'){
     try{
-      const code=await getContractCode({address:V2_ADDRESS});
+      // genlayer-js getContractCode expects the Address STRING, not {address}.
+      // Passing an object makes the RPC backend receive a dict as its ID.
+      const code=await getContractCode(V2_ADDRESS);
       const matched=exactSourceMatch(code,localSource);
       if(matched===true)out.sourceIdentity='SOURCE_TEXT_MATCHED';
       else if(matched===false)out.sourceIdentity='SOURCE_TEXT_MISMATCH';
@@ -81,7 +83,7 @@ if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]){
         getTransaction:arg=>client.getTransaction(arg),
         readContract:arg=>client.readContract(arg),
         getContractCode:typeof client.getContractCode==='function'?
-          arg=>client.getContractCode(arg):undefined,
+          address=>client.getContractCode(address):undefined,
         localSource
       });
       console.log('PAYJURY_V2_DEPLOYMENT_INSPECTION_READ_ONLY',JSON.stringify(out));

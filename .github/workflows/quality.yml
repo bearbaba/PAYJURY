@@ -29,7 +29,6 @@ jobs:
           node --check src/server.mjs
           node --check src/case-tracker.mjs
           node --check web/studio-wallet.mjs
-          node --check contracts/PayJuryV2.py
           node --check scripts/inspect-x402-quote.mjs
           node --check scripts/pay-x402-testnet.mjs
           node --check scripts/preflight-x402-payer.mjs

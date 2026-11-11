@@ -149,7 +149,10 @@ const V2_TEST_PAYER='0x4c7cb73ac8f8999af21cfc9ff4cf2333a9508dcb';
 const BASE_TEST_CHAIN='0x14a34'; // 84532
 const TEST_USDC='0x036cbd53842c5426634e7929541ec2318f3dcf7e';
 const EXACT_MERCHANT='0xe3837fe309618ae075dbef0a20735c0615a308e6';
-const PURCHASE_LOCK='payjury:v2:one-paid-x402:'+V2_TEST_PAYER;
+// A new, explicitly authorized single testnet session. The previously
+// accepted V2 purchase remains permanently protected by its OLD lock.
+const WEB_LIVE_SESSION='payjury-v2-web-one-take-20261111';
+const PURCHASE_LOCK='payjury:v2:one-paid-x402:'+V2_TEST_PAYER+':'+WEB_LIVE_SESSION;
 
 async function enforceBaseSepolia(provider){
   let chain=String(await provider.request({method:'eth_chainId'})).toLowerCase();

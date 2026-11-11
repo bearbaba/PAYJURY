@@ -1,6 +1,6 @@
 # PAYJURY — optional real x402 Base Sepolia client
 
-**UNEXECUTED.** This code is provided for a separate, explicitly operator-approved test only. The repository's CI and public website never initiate a payment.
+**ONE PAID TESTNET EXECUTION COMPLETED — 11 NOV 2026.** The operator approved and successfully completed a single PAYJURY x402 payment: [Base Sepolia TX `0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5`](https://sepolia.basescan.org/tx/0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5). No second payment is required or authorized. This document preserves the original safety workflow for audit; **do not replay the example commands**. CI and the public web never pay.
 
 The buyer is implemented with the official `@x402/core`, `@x402/evm` and `@x402/fetch` v2.30.0 packages. It uses the x402 EIP-3009 `exact` scheme on **Base Sepolia only** (`eip155:84532`). It permits precisely **10,000 atomic USDC = 0.01 USDC** to one explicitly approved merchant. It blocks unexpected recipients, other networks, non-USDC tokens, different amounts, and Permit2 schemes.
 
@@ -20,7 +20,7 @@ Confirm the resulting `X402_QUOTE_INSPECTED_NOT_PAID` includes the exact intende
 
 Before payment, run **`npm run pay:preflight`** using a dedicated Base Sepolia testnet wallet configured privately. It must report `X402_TESTNET_PAYER_READY_NO_SIGNATURE`, confirming the exact merchant quote, official USDC balance **at least 10000 atomic units**, and RPC chain ID 84532. This command does **not** authorize or sign anything. The testnet wallet address is public; the secret must never be printed.
 
-## Explicitly authorized paid acceptance — not automatic
+## Historic approval procedure — completed once; DO NOT replay
 
 After reviewing and approving a **single testnet transaction**, set the one-shot confirmation environment variable and run:
 

@@ -7,7 +7,7 @@
 V1 accepts a different `file_case` signer from the Base payer without requiring authorization. This is valid for the historical demo and remains permanent evidence, but cannot establish that the claimant represents the buyer. V2 closes that filing authorization gap with **GenLayer wallet identity**:
 
 - **Direct payer:** the signer address `gl.message.sender_address` exactly matches the Base payment `payer`.
-- **Delegate:** the payer signs **`set_delegate(delegate, true)` on the V2 contract**, which records authorization under the payer address. The delegate wallet can then file in their own name. The payer can sign **`set_delegate(delegate, false)`** to revoke permission for future filings.
+- **Delegate:** the payer signs **`set_delegate(network, tx_hash, delegate, true)` on the V2 contract**, which records authorization under the payer address. The delegate wallet can then file in their own name. The payer can sign **`set_delegate(network, tx_hash, delegate, false)`** to revoke permission for future filings relating to **that exact network and payment TX**, without affecting unrelated payments.
 - **Unapproved signer:** cannot file. Replaying an existing case or another case about the same payment is rejected. The original case ID is recomputed inside the contract using canonical SHA-256 of the 10 payment/delivery fields.
 - A third-party signer **cannot authorize itself** for someone else's payer identity. The same EOA wallet address is meaningful on Base and GenLayer, but this does not prove the cross-chain *payment* inside GenLayer; PAYJURY still uses independent off-chain Base receipts.
 
@@ -32,7 +32,7 @@ The existing website offers **verify evidence → review fields → connect wall
 5. On a brand-new **independently verified payment reference** (do not re-pay the old test to fabricate coverage), verify source data; confirm payer wallet files directly and unauthorized stranger is rejected. For the delegation path, have the payer sign **set_delegate(..., true)**, confirm its FINALIZED/SUCCESS and `can_file_for` return `true`. Then delegate files a different legitimate case. Finally payer signs revocation and confirms `can_file_for(...)=false`.
 6. Independently check onchain finalized `file_case`, `get_case=FILED`, finalized `adjudicate_case`, and `get_case=DECIDED` with a real case verdict. Do not demand a specific favorable result.
 
-**Still pending:** actual V2 GenVM execution, MetaMask/wallet end-to-end browser acceptance, full delivery-body evidence integrity, alternate outcomes REWORK and UNVERIFIABLE, robust delegation renewal after revocation, multi-wallet compatibility testing, and external security review. CI tests are **offline simulations**, not GenLayer Studio acceptance.
+**Still pending:** actual V2 GenVM execution, MetaMask/wallet end-to-end browser acceptance, full delivery-body evidence integrity, alternate outcomes REWORK and UNVERIFIABLE, multi-wallet compatibility testing, and external security review. CI tests are **offline simulations**, not GenLayer Studio acceptance.
 
 ## Scope and disclaimer
 

@@ -141,9 +141,13 @@ function v2Controls(){
     [trackedCaseV2.claimant?.toLowerCase(),trackedCaseV2.payer?.toLowerCase()].includes(v2Wallet?.toLowerCase());
   $('v2-adjudicate').disabled=!signed||!pending;
   const currentCase=trackedCaseV2?.caseId||verifiedPacket?.caseId;
-  $('v2-resume').disabled=!signed||!currentCase||!(
-    signedLock(currentCase,'file_case')?.hash||
-    signedLock(currentCase,'adjudicate_case')?.hash
+  const delegate=$('v2-delegate').value.trim().toLowerCase();
+  const delegationKey=verifiedPacket&&WALLET_ADDR.test(delegate)?
+    verifiedPacket.payer.toLowerCase()+':delegate:'+delegate:null;
+  $('v2-resume').disabled=!signed||!(
+    (currentCase&&signedLock(currentCase,'file_case')?.hash)||
+    (currentCase&&signedLock(currentCase,'adjudicate_case')?.hash)||
+    (delegationKey&&signedLock(delegationKey,'set_delegate')?.hash)
   );
 }
 function updateV2PreparedPacket(next){
@@ -198,6 +202,21 @@ async function refreshRecordedTransaction(caseId,method,hash){
       '. Keep the TX hash and inspect Explorer. Do not resend.');
     return false;
   }
+  if(method==='set_delegate'){
+    const details=signedLock(caseId,method);
+    const {payer,delegate,enabled}=details?.delegation||{};
+    if(!WALLET_ADDR.test(payer||'')||!WALLET_ADDR.test(delegate||'')){
+      v2Message('Delegation transaction FINALIZED / SUCCESS, but permission metadata missing. Preserve hash.');
+      return false;
+    }
+    const authorized=await sdk.readV2Contract(v2Address,'can_file_for',[payer,delegate]);
+    if(authorized!==enabled){
+      v2Message('Delegation TX finalized; permission readback not yet consistent. Preserve hash.');
+      return false;
+    }
+    v2Message('Delegation '+(enabled?'authorized':'revoked')+' and independently read from V2. TX '+hash);
+    return true;
+  }
   v2Message('GenLayer TX FINALIZED / SUCCESS: '+hash+'. Checking contract readback…');
   await refreshV2Readback(caseId);
   return true;
@@ -230,7 +249,7 @@ async function monitorSubmitted(caseId,method,hash){
     if(step<11)await new Promise(resolve=>setTimeout(resolve,2500));
   }
 }
-async function v2Write(method,caseId,args){
+async function v2Write(method,caseId,args,metadata=null){
   if(!v2Address||!v2Wallet||v2Busy)throw Error('V2 contract and connected wallet required');
   const existing=signedLock(caseId,method);
   if(existing)throw Error(existing.hash?
@@ -240,9 +259,9 @@ async function v2Write(method,caseId,args){
   v2Busy=true;v2Controls();
   try{
     // Lock BEFORE writeContract. If no hash comes back, never assume failure.
-    writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN',when:new Date().toISOString()});
+    writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN',delegation:metadata,when:new Date().toISOString()});
     const hash=await sdk.sendV2Write(v2Address,method,args);
-    writeLock(caseId,method,{state:'SUBMITTED',hash,when:new Date().toISOString()});
+    writeLock(caseId,method,{state:'SUBMITTED',hash,delegation:metadata,when:new Date().toISOString()});
     v2Message(method+' submitted: '+hash+'. Checking GenLayer finality without resending.');
     await monitorSubmitted(caseId,method,hash);
   }catch(error){
@@ -325,14 +344,34 @@ async function authorizeDelegate(enabled){
   if(!v2Wallet||!verifiedPacket||v2Wallet!==verifiedPacket.payer.toLowerCase()){
     v2Message('Only the payer wallet can authorize/revoke a delegate.');return;
   }
+  const payer=verifiedPacket.payer.toLowerCase();
   const delegate=$('v2-delegate').value.trim().toLowerCase();
   if(!WALLET_ADDR.test(delegate)||delegate===v2Wallet){
     v2Message('Enter a different valid 0x delegate wallet address.');return;
   }
-  if(!globalThis.confirm((enabled?'Authorize ':'Revoke ')+delegate+
-    ' for V2 filing? This sends a real GenLayer transaction.'))return;
-  const action=enabled?'delegate_enable_'+delegate:'delegate_revoke_'+delegate;
-  await v2Write('set_delegate',verifiedPacket.caseId+':'+action,[delegate,enabled]);
+  const key=payer+':delegate:'+delegate;
+  try{
+    const sdk=await getV2Sdk();
+    const permission=await sdk.readV2Contract(v2Address,'can_file_for',[payer,delegate]);
+    if(typeof permission!=='boolean')throw Error('Delegation status was not a verified boolean.');
+    if(permission===enabled){
+      v2Message('Delegation is already '+(enabled?'authorized':'revoked')+'. No transaction needed.');
+      return;
+    }
+    const previous=signedLock(key,'set_delegate');
+    if(previous){
+      if(!previous.hash)throw Error('Previous permission update has an unknown outcome. Inspect wallet activity.');
+      const oldTx=await sdk.checkV2Transaction(previous.hash);
+      if(!oldTx.finalized||!oldTx.success)
+        throw Error('Previous delegation TX is not confirmed successful. Do not resubmit.');
+      // A new opposite transition is valid only after the previous write is
+      // FINALIZED / SUCCESS and the current onchain permission proves it is needed.
+      globalThis.localStorage.removeItem(lockKey(key,'set_delegate'));
+    }
+    if(!globalThis.confirm((enabled?'Authorize ':'Revoke ')+delegate+
+      ' for V2 filing? This sends a real GenLayer transaction.'))return;
+    await v2Write('set_delegate',key,[delegate,enabled],{payer,delegate,enabled});
+  }catch(error){v2Message(String(error?.message||'Delegation preflight failed').slice(0,220));}
 }
 $('v2-authorize').addEventListener('click',()=>authorizeDelegate(true));
 $('v2-revoke').addEventListener('click',()=>authorizeDelegate(false));
@@ -356,9 +395,19 @@ $('v2-adjudicate').addEventListener('click',async()=>{
 $('v2-resume').addEventListener('click',async()=>{
   const id=trackedCaseV2?.caseId||verifiedPacket?.caseId;
   if(!id||!v2Address||!v2Wallet)return;
-  for(const action of ['file_case','adjudicate_case']){
-    const existing=signedLock(id,action);
-    if(existing?.hash){await refreshRecordedTransaction(id,action,existing.hash);return;}
+  if(id){
+    for(const action of ['file_case','adjudicate_case']){
+      const existing=signedLock(id,action);
+      if(existing?.hash){await refreshRecordedTransaction(id,action,existing.hash);return;}
+    }
   }
-  v2Message('No recorded transaction hash for this case. Check the signing wallet before any new operation.');
+  const delegate=$('v2-delegate').value.trim().toLowerCase();
+  if(WALLET_ADDR.test(delegate)&&verifiedPacket){
+    const dkey=verifiedPacket.payer.toLowerCase()+':delegate:'+delegate;
+    const history=signedLock(dkey,'set_delegate');
+    if(history?.hash){await refreshRecordedTransaction(dkey,'set_delegate',history.hash);return;}
+  }
+  v2Message('No recorded TX hash for this operation. Check wallet activity before another signature.');
 });
+
+$('v2-delegate').addEventListener('input',v2Controls);

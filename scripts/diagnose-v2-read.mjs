@@ -39,7 +39,7 @@ export async function runReadDiagnosis({reader,reference=REFERENCE}={}){
   const results=[];
   for(const x of methods(reference)){
     try{
-      const result=await reader(x);
+      const result=await reader({...x,variant:'latest-final'});
       if(x.method==='version'&&result!=='PAYJURY_V2_PAYMENT_SCOPED_AUTH_V1')
         throw Error('V2 version mismatch');
       if(x.method==='can_file_for'&&typeof result!=='boolean')
@@ -47,15 +47,29 @@ export async function runReadDiagnosis({reader,reference=REFERENCE}={}){
       if(x.method==='filing_status'&&!['NOT_AUTHORIZED','CASE_EXISTS',
         'TRANSFER_ALREADY_FILED','READY_REQUIRES_BASE_PROOF'].includes(result))
         throw Error('Filing status not recognized');
-      results.push({method:x.method,status:'READ_OK',result:x.method==='get_case'&&
+      results.push({method:x.method,variant:'latest-final',status:'READ_OK',result:x.method==='get_case'&&
         typeof result==='string'&&result.length>750?
         result.slice(0,750)+' [TRUNCATED]':result});
     }catch(err){
-      results.push({method:x.method,status:'READ_ERROR',
+      results.push({method:x.method,variant:'latest-final',status:'READ_ERROR',
         error:classifyReadError(err)});
     }
   }
   const status=results.find(x=>x.method==='filing_status');
+  // A second READ-ONLY variant is diagnostic only; never use a non-final
+  // result to authorize a financial or immutable on-chain filing.
+  let nonFinalProbe=null;
+  if(status?.status==='READ_ERROR'){
+    const probe=methods(reference).find(x=>x.method==='filing_status');
+    try{
+      const result=await reader({...probe,variant:'latest-nonfinal'});
+      nonFinalProbe={method:'filing_status',variant:'latest-nonfinal',
+        status:'READ_OK_DIAGNOSTIC_ONLY',result};
+    }catch(error){
+      nonFinalProbe={method:'filing_status',variant:'latest-nonfinal',
+        status:'READ_ERROR',error:classifyReadError(error)};
+    }
+  }
   const authorization=results.find(x=>x.method==='can_file_for');
   return {
     contract:reference.contract,caseId:reference.caseId,network:reference.network,
@@ -63,7 +77,7 @@ export async function runReadDiagnosis({reader,reference=REFERENCE}={}){
     noSignature:true,noWrite:true,noNewPayment:true,
     status:status?.status==='READ_OK'?status.result:'FILING_STATUS_UNVERIFIED',
     payerAuthorized:authorization?.status==='READ_OK'?authorization.result:'UNKNOWN',
-    results,
+    readSnapshot:'LATEST_FINAL',nonFinalProbe,results,
     next:status?.status==='READ_OK'&&status.result==='READY_REQUIRES_BASE_PROOF'?
       'Preflight readable. Confirm payment again before any single wallet-approved file_case.':
       'Do not sign or repay; inspect method-specific read errors, especially filing_status and get_case.'
@@ -81,8 +95,9 @@ if(import.meta.url===new URL('file://'+process.argv[1]).href){
     if(studionet.id!==61999)throw Error('Incorrect GenLayer chain');
     const client=createClient({chain:studionet,account:createAccount('0x'+'11'.repeat(32))});
     const result=await runReadDiagnosis({
-      reader:({method,args})=>client.readContract({
-        address, functionName:method,args
+      reader:({method,args,variant})=>client.readContract({
+        address, functionName:method,args,
+        transactionHashVariant:variant
       })
     });
     console.log('PAYJURY_V2_READ_DIAGNOSTIC',JSON.stringify(result,null,2));

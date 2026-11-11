@@ -13,9 +13,10 @@
     "test": "node --test tests/*.test.mjs",
     "check": "npm test && python -m py_compile contracts/PayJury.py",
     "quote": "node scripts/inspect-x402-quote.mjs",
-    "pay:testnet": "node scripts/pay-x402-testnet.mjs",
+    "pay:testnet": "node --env-file-if-exists=.env scripts/pay-x402-testnet.mjs",
     "contract:verify": "node scripts/verify-genlayer-deployment.mjs",
-    "deploy:inspect": "node scripts/inspect-deploy-tx.mjs"
+    "deploy:inspect": "node scripts/inspect-deploy-tx.mjs",
+    "pay:preflight": "node --env-file-if-exists=.env scripts/preflight-x402-payer.mjs"
   },
   "dependencies": {
     "@x402/core": "2.30.0",

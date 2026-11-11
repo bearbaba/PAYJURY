@@ -46,6 +46,9 @@
       </div>
       <div class="panel tracker-panel">
         <form id="track-form" class="tracker-form">
+          <label for="track-version">Contract version
+            <select id="track-version" name="version"><option value="v1">V1 · Verified history</option><option value="v2">V2 · Authorized filing</option></select>
+          </label>
           <label for="track-id">GenLayer Case ID
             <input id="track-id" name="caseId" placeholder="pj_…" required pattern="pj_[0-9a-f]{32}" maxlength="35" autocomplete="off" spellcheck="false">
           </label>
@@ -92,6 +95,37 @@
           <label>Actual API delivery<textarea name="delivery" rows="3" maxlength="2500" required placeholder="Paste the delivered response or a factual summary."></textarea></label>
           <label>Supporting evidence<textarea name="evidence" rows="3" maxlength="2500" required placeholder="Source rows, verifiable references and discrepancies; do not include secrets."></textarea></label>
           <div class="submit-row"><button id="verify-btn" type="submit">Verify transfer & prepare case <span>↗</span></button><p>Read-only Base RPC. No payment, signing, or GenLayer write.</p></div>
+          <div class="filing-v2" id="filing-v2">
+            <div class="horizontal-line"></div>
+            <div class="panel-top"><div><div class="mini-label">STEP 03 · SIGN WITH YOUR WALLET</div><h3>File &amp; decide on GenLayer</h3></div><span class="tag" id="v2-mode">V2 GATED</span></div>
+            <p class="muted" id="v2-explanation">This step only activates after a verified PAYJURY V2 deployment is configured. The original V1 contract remains read-only for historical cases.</p>
+            <div class="v2-overview" id="v2-overview" hidden>
+              <div><small>Exact payment</small><strong id="v2-payment">—</strong></div>
+              <div><small>Computed case</small><code id="v2-case">—</code></div>
+              <div><small>GenLayer signer</small><code id="v2-signer">Not connected</code></div>
+            </div>
+            <div class="v2-buttons">
+              <button type="button" id="v2-connect" disabled>Connect GenLayer wallet</button>
+              <button type="button" id="v2-file" disabled>Review &amp; file one case</button>
+              <button type="button" id="v2-adjudicate" disabled>Request AI decision</button>
+              <button type="button" id="v2-resume" disabled>Refresh recorded TX</button>
+            </div>
+            <div class="v2-delegation">
+              <details>
+                <summary>Authorize or revoke a filing delegate</summary>
+                <p class="muted">Only the payer wallet can approve another GenLayer wallet. This is a signed, revocable GenLayer V2 transaction, not an unsecured text field.</p>
+                <label for="v2-delegate">Delegate wallet address
+                  <input id="v2-delegate" placeholder="0x…" inputmode="text" maxlength="42" autocomplete="off">
+                </label>
+                <div class="v2-buttons">
+                  <button type="button" id="v2-authorize" disabled>Authorize delegate</button>
+                  <button type="button" id="v2-revoke" disabled>Revoke delegate</button>
+                </div>
+              </details>
+            </div>
+            <p class="v2-status" id="v2-status" aria-live="polite" role="status">Read-only mode. No transaction is submitted from this page until V2 is deployed and you explicitly approve each action.</p>
+            <p class="v2-disclaimer">V2 enforces who can file but does not independently verify Base USDC payments inside GenLayer. Every write requires wallet confirmation; unknown outcomes must never be replayed.</p>
+          </div>
         </form>
         <aside class="right-stack">
           <div class="result-panel panel" aria-live="polite" id="result">

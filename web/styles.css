@@ -26,3 +26,24 @@
 .tracker-links a{color:var(--lime)}
 @media(max-width:900px){.tracker-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.tracker-head{align-items:start;flex-direction:column}}
 @media(max-width:560px){.tracker{padding-top:32px}.tracker-panel{padding:16px}.tracker-form button{width:100%}.tracker-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.tracker-metrics>div{padding:11px}}
+
+/* One-stop V2 workflow: controls stay near the evidence form, never auto-sign. */
+.filing-v2{margin-top:26px}
+.filing-v2 h3{margin:9px 0}
+.v2-overview{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
+.v2-overview[hidden]{display:none}
+.v2-overview>div{padding:13px 14px;background:#0d1620;border:1px solid #30414b;border-radius:9px;min-width:0}
+.v2-overview>div:last-child{grid-column:1/-1}
+.v2-overview small{display:block;color:#9eb3bf;font-size:11px;margin-bottom:6px}
+.v2-overview code,.v2-overview strong{font-size:12px;overflow-wrap:anywhere;color:#dce9f2}
+.v2-buttons{display:flex;gap:9px;flex-wrap:wrap;margin:16px 0}
+.v2-buttons button{border:1px solid #47615b;border-radius:8px;padding:11px 13px;color:#d5ecdb;background:#192b30;font-size:12px;font-weight:800}
+.v2-buttons button:first-child{border-color:#83af68}
+.v2-buttons button:disabled{opacity:.42;cursor:not-allowed}
+.v2-buttons button:not(:disabled):hover{border-color:var(--lime)}
+.v2-delegation{border-block:1px solid var(--border);padding:16px 0}
+.v2-delegation summary{font-weight:700;cursor:pointer;color:#d0e8ef}
+.v2-delegation label{margin-top:16px}
+.v2-status{color:#d4e3ee;background:#162536;padding:12px 15px;border-radius:9px;border:1px solid #354651;line-height:1.6;font-size:12px;overflow-wrap:anywhere}
+.v2-disclaimer{color:#829caa;font-size:11px;line-height:1.7}
+@media(max-width:600px){.v2-overview{grid-template-columns:1fr}.v2-overview>div:last-child{grid-column:1}.v2-buttons button{flex:1 1 40%}}

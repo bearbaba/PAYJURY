@@ -8,6 +8,8 @@ import {trackFiledCase} from './case-tracker.mjs';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const MAX_BODY=18000;
+const V1_ADDRESS='0xd57a04c3cc304ab30c9435a9ae34a840802f11c8';
+const v2Configured=address=>/^0x[0-9a-f]{40}$/i.test(address||'')&&address.toLowerCase()!==V1_ADDRESS;
 function respond(res,status,data) {
   res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store',
     'x-content-type-options':'nosniff','referrer-policy':'no-referrer'});
@@ -23,9 +25,9 @@ async function jsonBody(req) {
   try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}
   catch{throw Error('Invalid JSON request');}
 }
-async function readGenLayerCaseRecord(caseId) {
+async function readGenLayerCaseRecord(caseId, contractAddress=process.env.GENLAYER_CONTRACT_ADDRESS) {
   if(!/^pj_[0-9a-f]{32}$/.test(caseId))throw Error('Invalid case ID');
-  const address=process.env.GENLAYER_CONTRACT_ADDRESS;
+  const address=contractAddress;
   if(!/^0x[0-9a-f]{40}$/i.test(address||''))throw Error('GenLayer readback not configured');
   const [{createClient,createAccount},{studionet}]=await Promise.all([
     import('genlayer-js'),import('genlayer-js/chains')]);
@@ -53,9 +55,12 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
     try {
       if(req.method==='GET'&&url.pathname==='/api/status'){
         const contract=process.env.GENLAYER_CONTRACT_ADDRESS;
+        const v2=process.env.GENLAYER_V2_CONTRACT_ADDRESS;
         respond(res,200,{name:'PAYJURY',mode:'evidence-first',
           paymentVerifierConfigured:Boolean(rpcUrl),genlayerReadConfigured:/^0x[0-9a-f]{40}$/i.test(contract||''),
           genlayerContractAddress:/^0x[0-9a-f]{40}$/i.test(contract||'')?contract:null,
+          genlayerV2ContractAddress:v2Configured(v2)?v2:null,
+          v2FilingEnabled:v2Configured(v2),
           acceptsPayments:false,signsGenLayerWrites:false});return;
       }
       if(req.method==='POST'&&url.pathname==='/api/verify'){
@@ -72,8 +77,19 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
         if(!/^pj_[0-9a-f]{32}$/.test(caseId)){
           respond(res,422,{error:'Invalid case ID'});return;
         }
+        const version=url.searchParams.get('version')||'v1';
+        if(!['v1','v2'].includes(version)){
+          respond(res,422,{error:'Unsupported case contract version'});return;
+        }
+        const address=version==='v2'?process.env.GENLAYER_V2_CONTRACT_ADDRESS:
+          process.env.GENLAYER_CONTRACT_ADDRESS;
+        if(version==='v2'&&!v2Configured(address)){
+          respond(res,503,{error:'V2 contract not configured. Read-only v1 available.'});return;
+        }
         try{
-          respond(res,200,await trackFiledCase(caseId,{readCase:caseReader,verifyTransfer,rpcUrl}));
+          const tracked=await trackFiledCase(caseId,{readCase:id=>caseReader(id,address),verifyTransfer,rpcUrl});
+          respond(res,200,{...tracked,contractVersion:version,
+            contractAddress:/^0x[0-9a-f]{40}$/i.test(address||'')?address:null});
         }catch{
           respond(res,422,{error:'GenLayer case readback unavailable or invalid. No verdict can be inferred.'});
         }
@@ -84,7 +100,7 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
         catch{respond(res,422,{error:'GenLayer case not independently readable or not configured. Do not infer a verdict.'});}
         return;
       }
-      if(req.method==='GET'&&['/','/app.js','/styles.css'].includes(url.pathname)){
+      if(req.method==='GET'&&['/','/app.js','/styles.css','/studio-wallet.bundle.js'].includes(url.pathname)){
         const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
         const content=await readFile(path.join(ROOT,name));
         res.writeHead(200,{'content-type':MIME[path.extname(name)],'x-content-type-options':'nosniff',

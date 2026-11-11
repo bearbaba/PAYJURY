@@ -28,6 +28,7 @@ jobs:
           node --check src/x402.mjs
           node --check src/server.mjs
           node --check src/case-tracker.mjs
+          node --check web/studio-wallet.mjs
           node --check scripts/inspect-x402-quote.mjs
           node --check scripts/pay-x402-testnet.mjs
           node --check scripts/preflight-x402-payer.mjs
@@ -36,6 +37,8 @@ jobs:
           node --check scripts/inspect-deploy-tx.mjs
           node --check scripts/prepare-first-paid-case.mjs
           node --check web/app.js
+      - name: Build self-hosted browser wallet module (no remote scripts)
+        run: npm run build:web
       - name: Offline unit tests and Python contract syntax
         run: npm run check
       - name: Verify official x402 SDK buyer API exports without signing

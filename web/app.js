@@ -172,6 +172,10 @@ function updateV2PreparedPacket(next){
   verifiedPacket=next;
   trackedCaseV2=null;
   $('v2-overview').hidden=true;
+  if(!next){
+    v2Message(v2Address?'Payment or evidence changed. Verify again before any wallet action.':
+      'V2 signing is not available. Prepare evidence read-only or track a completed V1 case.');
+  }
   if(next?.settlement?.result==='BASE_USDC_TRANSFER_VERIFIED'){
     $('v2-overview').hidden=false;
     $('v2-case').textContent=next.caseId;

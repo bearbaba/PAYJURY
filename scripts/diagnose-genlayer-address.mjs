@@ -35,10 +35,13 @@ async function readOne({address,status,fetchImpl=fetch}){
   }
   return {state:'CODE_RETURNED',code:payload.result};
 }
-function publicReadResult(result,localSource,address){
+function publicReadResult(result,localSource,address,snapshot){
   if(result.state!=='CODE_RETURNED')return result;
   const analyzed=analyzeContractSource(localSource,result.code,{address});
-  return {state:analyzed.status,sourceMatches:analyzed.sourceMatches===true,
+  return {state:analyzed.sourceMatches===true ?
+      (snapshot==='finalized'?'SOURCE_MATCHED_FINALIZED':'SOURCE_MATCHED_DECIDED'):
+      analyzed.status==='DEPLOYED_SOURCE_DIFFERENT'?'DEPLOYED_SOURCE_DIFFERENT':'DEPLOYED_CODE_UNVERIFIED',
+    sourceMatches:analyzed.sourceMatches===true,
     declaredMethods:analyzed.expectedMethodsInDeployedSource||[]};
 }
 function publicReferenceResult(result){
@@ -62,17 +65,17 @@ export async function diagnoseGenLayerAddress({
   const targetFinalized=await readOne({address,status:'finalized',fetchImpl});
   const referenceDecided=await readOne({address:referenceAddress,status:'decided',fetchImpl});
   const referenceFinalized=await readOne({address:referenceAddress,status:'finalized',fetchImpl});
-  const target={decided:publicReadResult(targetDecided,localSource,address),
-    finalized:publicReadResult(targetFinalized,localSource,address)};
+  const target={decided:publicReadResult(targetDecided,localSource,address,'decided'),
+    finalized:publicReadResult(targetFinalized,localSource,address,'finalized')};
   const reference={decided:publicReferenceResult(referenceDecided),
     finalized:publicReferenceResult(referenceFinalized)};
   let status='UNVERIFIED';
-  if(target.finalized.state==='SOURCE_MATCHED_FINALIZED_STATE'){
+  if(target.finalized.state==='SOURCE_MATCHED_FINALIZED'){
     status='TARGET_SOURCE_MATCHED_FINALIZED';
   }else if(target.finalized.state==='DEPLOYED_SOURCE_DIFFERENT'||
            target.decided.state==='DEPLOYED_SOURCE_DIFFERENT'){
     status='TARGET_SOURCE_DIFFERENT';
-  }else if(target.decided.state==='SOURCE_MATCHED_FINALIZED_STATE'){
+  }else if(target.decided.state==='SOURCE_MATCHED_DECIDED'){
     // Helper labels a source match against supplied data, not finality; this
     // decided-only case MUST NOT be accepted as a finalized deployment.
     status='TARGET_READABLE_DECIDED_ONLY';

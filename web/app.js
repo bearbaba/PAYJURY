@@ -230,8 +230,19 @@ async function refreshRecordedTransaction(caseId,method,hash){
     return false;
   }
   if(!state.success){
-    v2Message('GenLayer transaction finalized but execution was not successful: '+state.execution+
-      '. Keep the TX hash and inspect Explorer. Do not resend.');
+    // SDK v1.1.8 Studio getTransaction can omit top-level execution metadata.
+    // FINALIZED / UNKNOWN does NOT mean the contract reverted.
+    if(state.execution==='UNKNOWN'||state.executionConflict===true){
+      v2Message('TX FINALIZED, but GenVM result is '+state.execution+
+        '. Checking existing V2 contract state READ ONLY; no signing or retry.');
+      if(method==='file_case'||method==='adjudicate_case')
+        return refreshV2Readback(caseId,method,{executionUnverified:true});
+      v2Message('TX FINALIZED, but delegate execution is unverified. Preserve '+hash+
+        ' and inspect Explorer; never sign again.');
+      return false;
+    }
+    v2Message('GenLayer TX FINALIZED with execution '+state.execution+
+      ': '+hash+'. Inspect Explorer and preserve the one-shot lock. Do not resend.');
     return false;
   }
   if(method==='set_delegate'){
@@ -250,24 +261,47 @@ async function refreshRecordedTransaction(caseId,method,hash){
     return true;
   }
   v2Message('GenLayer TX FINALIZED / SUCCESS: '+hash+'. Checking contract readback…');
-  await refreshV2Readback(caseId);
-  return true;
+  return refreshV2Readback(caseId,method,{executionUnverified:false});
 }
-async function refreshV2Readback(caseId){
+async function refreshV2Readback(caseId,method,{executionUnverified=false}={}){
   try{
-    const response=await fetch('/api/case?version=v2&caseId='+encodeURIComponent(caseId));
+    const response=await fetch('/api/case?version=v2&caseId='+encodeURIComponent(caseId),{
+      method:'GET',cache:'no-store'
+    });
     if(!response.ok)throw Error('GenLayer case readback not yet available');
     const result=await response.json();
-    if(result.caseId!==caseId)throw Error('Case readback ID mismatch');
+    const p=verifiedPacket;
+    if(result.caseId!==caseId||result.contractVersion!=='v2'||
+       result.contractAddress?.toLowerCase()!==v2Address?.toLowerCase()||
+       result.identityBinding!=='DETERMINISTIC_ID_MATCHED'||
+       result.settlement?.status!=='BASE_USDC_TRANSFER_VERIFIED'||
+       !p||p.caseId!==caseId||
+       result.txHash!==p.txHash||result.network!==p.network||
+       result.payer!==p.payer||result.payee!==p.payee||
+       result.amountAtomic!==p.amountAtomic)
+      throw Error('On-chain case identity or Base receipt binding mismatch');
+    if(method==='adjudicate_case'&&result.caseStatus!=='DECIDED')
+      throw Error('V2 decision not persisted');
+    if(method==='file_case'&&!['FILED','DECIDED'].includes(result.caseStatus))
+      throw Error('V2 filing not persisted');
     updateV2TrackedCase(result);
     $('track-version').value='v2';
     $('track-id').value=caseId;
-    $('track-form').requestSubmit();
-    v2Message(result.caseStatus==='DECIDED'?
-      'AI verdict confirmed from V2: '+result.verdict+'. No more signing required.':
-      'V2 filing confirmed on-chain. Case status FILED; choose Request AI decision after reviewing evidence.');
+    if(executionUnverified){
+      v2Message(result.caseStatus==='DECIDED'?
+        'V2 DECIDED confirmed by independent contract readback. Original TX execution metadata remains unavailable. Verdict '+result.verdict+'.':
+        'V2 FILED confirmed by independent GenLayer contract readback and Base USDC receipt. Original TX execution metadata remains unavailable; preserve its hash.');
+    }else{
+      v2Message(result.caseStatus==='DECIDED'?
+        'AI verdict confirmed from V2: '+result.verdict+'. No more signing required.':
+        'V2 filing confirmed on-chain. Case status FILED; choose Request AI decision after reviewing evidence.');
+    }
+    return true;
   }catch{
-    v2Message('TX is finalized, but contract readback is unavailable. Preserve the hash and use Refresh recorded TX. Never submit again.');
+    v2Message('GenLayer TX is finalized, but the V2 case is not yet independently readable as '+
+      (method==='adjudicate_case'?'DECIDED':'FILED')+
+      '. Preserve original hash; use Refresh recorded TX. Never sign or pay again.');
+    return false;
   }
 }
 async function monitorSubmitted(caseId,method,hash){

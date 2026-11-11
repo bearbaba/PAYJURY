@@ -5,7 +5,7 @@ import path from 'node:path';
 import {validateClaim,verifyBaseUSDCTransfer,inspectBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from './payment.mjs';
 import {trackFiledCase} from './case-tracker.mjs';
 import {serveV2X402} from './v2-x402-relay.mjs';
-import {isGenLayerOverlongRlpError,safelyReadV2FilingStatusRaw} from './v2-raw-read.mjs';
+import {isGenLayerOverlongRlpError} from './v2-raw-read.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
@@ -64,18 +64,10 @@ export async function readV2Finalized(client,{address,functionName,args},variant
 }
 async function v2DefaultReader({address,functionName,args}){
   const client=await genlayerReadClient();
-  try{
-    return await readV2Finalized(client,{address,functionName,args});
-  }catch(error){
-    // Work around confirmed GenLayer RPC #1745 ONLY for filing_status.
-    // Both original version() and can_file_for() must agree with matching
-    // bare-calldata read results before we accept the original V2 verdict.
-    if(functionName!=='filing_status'||!isGenLayerOverlongRlpError(error))
-      throw error;
-    return safelyReadV2FilingStatusRaw(client,{address,functionName,args},{
-      authoritativeReader:request=>readV2Finalized(client,request)
-    });
-  }
+  // Normal GenLayerJS finalized reads are authoritative. Raw calldata
+  // workaround was tested LIVE and the VM rejected it: do not rely on it
+  // in transaction gating. Instead clearly classify the known upstream bug.
+  return readV2Finalized(client,{address,functionName,args});
 }
 async function v2DefaultTxReader({hash}){
   const client=await genlayerReadClient();
@@ -164,8 +156,19 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
         try{
           const result=await v2Reader({address,functionName:method,args});
           respond(res,200,{address,method,result,readOnly:true});
-        }catch{
-          respond(res,503,{error:'GenLayer V2 RPC read unavailable. No wallet transaction was attempted.'});
+        }catch(error){
+          if(method==='filing_status'&&isGenLayerOverlongRlpError(error)){
+            // Existing GenLayer Studio bug #1745: backend cannot parse
+            // long read calldata. This is NOT a "READY" response.
+            respond(res,503,{
+              error:'GenLayer V2 filing_status read blocked by upstream RLP length bug',
+              code:'GENLAYER_RLP_255_READ_UNAVAILABLE',
+              readOnly:true,filingStatus:'UNVERIFIED',
+              noWalletTransactionAttempted:true
+            });
+          }else{
+            respond(res,503,{error:'GenLayer V2 RPC read unavailable. No wallet transaction was attempted.'});
+          }
         }
         return;
       }

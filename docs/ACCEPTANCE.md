@@ -15,7 +15,7 @@
 
 ## Current acceptance ledger
 
-- [x] Repo initialized with x402 quote inspection and exact host allowlist.
+- [x] Repo initialized with x402 quote inspection, exact host allowlist, and official one-shot x402 testnet buyer code (not yet live-executed).
 - [x] Read-only Base USDC transfer verification implementation and negative tests.
 - [x] Immutable case packet derivation and source of truth labels.
 - [x] GenLayer contract source with AI validator adjudication methods.

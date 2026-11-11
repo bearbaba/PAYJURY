@@ -133,7 +133,10 @@ export async function checkV2Transaction(hash){
   if(String(body.hash||'').toLowerCase()!==hash.toLowerCase())
     throw Error('GenLayer transaction lookup hash mismatch; never retry the write.');
   return {hash,status:body.status,execution:body.execution,
-    finalized:body.finalized===true,success:body.success===true};
+    finalized:body.finalized===true,success:body.success===true,
+    executionKnown:body.executionKnown===true,
+    executionConflict:body.executionConflict===true,
+    executionSource:body.executionSource||'NOT_REPORTED'};
 }
 
 /**

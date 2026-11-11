@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {validateClaim,verifyBaseUSDCTransfer,inspectBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from './payment.mjs';
 import {trackFiledCase} from './case-tracker.mjs';
+import {serveV2X402} from './v2-x402-relay.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
@@ -120,6 +121,15 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
           genlayerV2ContractAddress:v2Configured(v2)?v2:null,
           v2FilingEnabled:v2Configured(v2),
           acceptsPayments:false,signsGenLayerWrites:false});return;
+      }
+      if(['/api/v2/x402/quote','/api/v2/x402/execute'].includes(url.pathname)){
+        if(!v2Configured(process.env.GENLAYER_V2_CONTRACT_ADDRESS)){
+          respond(res,503,{error:'V2 contract not configured; x402 payment remains disabled.'});return;
+        }
+        // This route can relay a real signed payment. It uses only an
+        // exact-merchant, test-USDC, one-shot, per-payer lock. No server signer.
+        await serveV2X402({req,res,rpcUrl});
+        return;
       }
       if(req.method==='GET'&&url.pathname==='/api/v2/read'){
         const address=process.env.GENLAYER_V2_CONTRACT_ADDRESS;

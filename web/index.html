@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090c14">
+  <meta name="description" content="PAYJURY — verify paid API deliveries with x402 evidence and GenLayer adjudication.">
+  <title>PAYJURY — Payment & Delivery Court</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="glow glow-a"></div><div class="glow glow-b"></div>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="PAYJURY home"><span class="brand-symbol">P<span>J</span></span><span>PAY<span class="brand-muted">JURY</span></span></a>
+    <nav aria-label="Primary">
+      <a href="#workflow">Workflow</a><a href="#verification">Verification</a>
+      <a href="https://github.com/bearbaba/PAYJURY" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+    </nav>
+    <span class="environment"><span class="led"></span> EVIDENCE-FIRST BETA</span>
+  </header>
+  <main>
+    <section class="hero container">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="line"></span> THE INTERNET COURT FOR PAID AI SERVICES</div>
+        <h1>Payment is<br>provable.<br><em>Delivery should be too.</em></h1>
+        <p>AI agents pay for APIs in seconds. PAYJURY connects independent x402 payment evidence to GenLayer’s AI-powered delivery adjudication — with clear receipts, immutable terms and no invented verdicts.</p>
+        <div class="hero-actions"><a class="primary" href="#workflow">Prepare a dispute <span>↗</span></a><a class="secondary" href="#verification">How verification works ↘</a></div>
+      </div>
+      <div class="hero-aside">
+        <div class="subhead"><span class="green-dot"></span> PROOF PIPELINE</div>
+        <div class="sequence"><div class="sequence-stage"><span class="sequence-num">01</span><div><b>PAY</b><small>HTTP 402 · Base USDC</small></div><span class="arrow">↗</span></div>
+          <div class="connector"></div><div class="sequence-stage"><span class="sequence-num">02</span><div><b>DISPUTE</b><small>Immutable delivery evidence</small></div><span class="arrow">↗</span></div>
+          <div class="connector"></div><div class="sequence-stage active"><span class="sequence-num">03</span><div><b>VERDICT</b><small>GenLayer Intelligent Contract</small></div><span class="arrow">↗</span></div></div>
+        <div class="aside-foot"><span>No escrow. No automatic refunds.</span><span>Transparent by design.</span></div>
+      </div>
+    </section>
+
+    <section class="ticker"><div class="container ticker-inner"><span>BASE USDC</span><i></i><span>HTTP x402</span><i></i><span>GENLAYER STUDIONET</span><i></i><span>INDEPENDENT VERIFICATION</span><i></i><span>AI JURY</span></div></section>
+
+    <section class="workspace container" id="workflow">
+      <div class="section-head"><div><div class="eyebrow">THE WORKSPACE</div><h2>One case. Three clear steps.</h2></div><p>Enter the real transaction details and the disputed delivery. Nothing is signed or paid by this page.</p></div>
+      <div class="progress" aria-label="Workflow steps"><div class="step current"><span>01</span> Payment</div><div class="rule"></div><div class="step"><span>02</span> Dispute</div><div class="rule"></div><div class="step"><span>03</span> Verdict</div></div>
+      <div class="work-grid">
+        <form class="case-form panel" id="case-form">
+          <div class="panel-top"><div><div class="mini-label">STEP 01 · PROVE THE TRANSFER</div><h3>Payment evidence</h3></div><span class="tag">Read only</span></div>
+          <p class="muted">A settlement header alone is not enough. We verify the actual USDC Transfer event on Base, with at least two confirmations.</p>
+          <div class="fields two">
+            <label>Network<select name="network" id="network"><option value="eip155:84532">Base Sepolia · Testnet</option><option value="eip155:8453">Base · Mainnet</option></select></label>
+            <label>Amount (USDC atomic units)<input name="amountAtomic" value="10000" required pattern="[0-9]+" inputmode="numeric" maxlength="10"><small>10,000 units = 0.01 USDC · max 100,000</small></label>
+          </div>
+          <div class="fields"><label>Paid API endpoint<input name="endpoint" placeholder="https://api.example.com/paid-resource" required maxlength="400"></label>
+          <label>Transaction hash<input name="txHash" placeholder="0x… confirmed Base transaction" required maxlength="66"></label></div>
+          <div class="fields two"><label>Buyer wallet<input name="payer" placeholder="0x… payer" required maxlength="42"></label><label>Merchant wallet<input name="payee" placeholder="0x… recipient" required maxlength="42"></label></div>
+          <label>USDC contract address<input name="asset" id="asset" readonly value="0x036cbd53842c5426634e7929541ec2318f3dcf7e"></label>
+          <label>Optional PAYMENT-RESPONSE header<input name="paymentResponseHeader" placeholder="Base64 x402 settlement response (no signature/private key)" maxlength="8192"><small>Never paste PAYMENT-SIGNATURE, private keys, or webhook tokens.</small></label>
+          <div class="horizontal-line"></div>
+          <div class="panel-top"><div><div class="mini-label">STEP 02 · THE DELIVERY DISPUTE</div><h3>Case evidence</h3></div><span class="tag">Immutable packet</span></div>
+          <p class="muted">State the original requirements. Explain precisely what was delivered, and provide inspectable supporting evidence.</p>
+          <label>Acceptance terms<textarea name="terms" rows="3" maxlength="1400" required placeholder="e.g. Return three invoice subtotals calculated from the supplied source rows."></textarea></label>
+          <label>Actual API delivery<textarea name="delivery" rows="3" maxlength="2500" required placeholder="Paste the delivered response or a factual summary."></textarea></label>
+          <label>Supporting evidence<textarea name="evidence" rows="3" maxlength="2500" required placeholder="Source rows, verifiable references and discrepancies; do not include secrets."></textarea></label>
+          <div class="submit-row"><button id="verify-btn" type="submit">Verify transfer & prepare case <span>↗</span></button><p>Read-only Base RPC. No payment, signing, or GenLayer write.</p></div>
+        </form>
+        <aside class="right-stack">
+          <div class="result-panel panel" aria-live="polite" id="result">
+            <div class="mini-label">CURRENT CASE STATUS</div><span class="status pending" id="case-status">NOT VERIFIED</span>
+            <h3 id="case-heading">Evidence awaiting review</h3><p id="case-detail">Complete the case form to verify a real Base USDC transfer. A prepared case is not yet an on-chain filing.</p>
+            <div class="code-box"><span>Case ID</span><code id="case-id">—</code></div>
+            <div class="code-box"><span>On-chain verdict</span><strong id="verdict">UNVERIFIED</strong></div>
+            <div class="result-actions"><button type="button" id="read-verdict" disabled>Read GenLayer case ↗</button><button type="button" id="copy-case" disabled>Copy packet</button></div>
+          </div>
+          <div class="truth-panel panel" id="verification">
+            <div class="mini-label">EVIDENCE STANDARD</div><h3>Nothing is assumed.</h3>
+            <ul><li><span class="check-symbol">✓</span><div><b>Independent settlement check</b><small>Base receipt, USDC Transfer event, sender, recipient, amount and confirmations.</small></div></li>
+            <li><span class="check-symbol">✓</span><div><b>Exact case binding</b><small>One deterministic case identity from payment reference, terms, delivery and evidence.</small></div></li>
+            <li><span class="check-symbol">✓</span><div><b>GenLayer readback</b><small>Only a deployed, readable contract can return a case verdict. UI never generates one.</small></div></li>
+            <li><span class="check-symbol">·</span><div><b>Important limitation</b><small>USDC transfer ≠ automatically proven x402 purchase, good service or refund eligibility.</small></div></li></ul>
+          </div>
+        </aside>
+      </div>
+    </section>
+    <section class="footer-note container"><div><span class="brand small">PJ</span><p>PAYJURY is an independent proof-and-dispute demo. Not a payment processor, arbitrator with legal authority, or escrow service.</p></div><span>BUILT FOR THE INTERNET COURT ECOSYSTEM · 2026</span></section>
+  </main>
+</body>
+</html>

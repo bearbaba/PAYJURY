@@ -78,6 +78,10 @@ $('copy-case').addEventListener('click',async()=>{
   }catch{display('COPY FAILED','Clipboard unavailable','Copy the case JSON using a supported browser clipboard permission.','error');}
 });
 fetch('/api/status').then(res=>res.json()).then(data=>{
+  if(data.hostedReadOnly){
+    const fresh=$('v2-fresh-purchase-panel');
+    if(fresh)fresh.hidden=true;
+  }
   if(!data.paymentVerifierConfigured){
     display('CONFIGURATION REQUIRED','Base RPC not configured',
       'Set BASE_RPC_URL on the local server to verify real token transfers. No demo evidence is fabricated.','pending');
@@ -133,9 +137,16 @@ $('track-form').addEventListener('submit',async event=>{
     message.textContent=String(error?.message||'Case lookup unavailable').slice(0,220);
   }finally{button.disabled=false;}
 });
+const VERIFIED_V2_CASE='pj_9f2276fd1904120b16d5f5b6ea5f7a2b';
 $('track-example').addEventListener('click',()=>{
-  $('track-version').value='v1';
-  $('track-id').value='pj_3f6b4f29a744db71c63f9acf552d2a19';
+  $('track-version').value='v2';
+  $('track-id').value=VERIFIED_V2_CASE;
+  $('track-form').requestSubmit();
+});
+// The landing page is a proof-first demo. This is one read-only lookup,
+// never a payment, a wallet signature or a GenLayer write.
+queueMicrotask(()=>{
+  if(!$('track-id').value)$('track-id').value=VERIFIED_V2_CASE;
   $('track-form').requestSubmit();
 });
 

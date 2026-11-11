@@ -1,3 +1,4 @@
+import {assessV2FilingPreflight,KNOWN_RLP_READ_CODE} from './filing-policy.js';
 const $=id=>document.getElementById(id);
 const form=$('case-form'), network=$('network'), asset=$('asset');
 const status=$('case-status'),heading=$('case-heading'),detail=$('case-detail');
@@ -365,15 +366,39 @@ $('v2-file').addEventListener('click',async()=>{
       throw Error('Case evidence changed since verification. Verify again.');
     const sdk=await getV2Sdk();
     await requireGenuineV2Interface(sdk);
-    const state=await sdk.readV2Contract(v2Address,'filing_status',[
-      p.caseId,p.network,p.txHash,p.token,p.payer,p.payee,p.amountAtomic,v2Wallet
-    ]);
-    if(state!=='READY_REQUIRES_BASE_PROOF')
-      throw Error('V2 filing blocked: '+String(state));
-    if(!globalThis.confirm('Confirm ONE GenLayer V2 filing for '+p.caseId+
+    let state=null,readErrorCode=null,payerRights=null;
+    try{
+      state=await sdk.readV2Contract(v2Address,'filing_status',[
+        p.caseId,p.network,p.txHash,p.token,p.payer,p.payee,p.amountAtomic,v2Wallet
+      ]);
+    }catch(error){
+      if(error?.code!==KNOWN_RLP_READ_CODE)throw error;
+      readErrorCode=error.code;
+      // An 8-arg read fails in upstream Studio's RLP decoder, but the
+      // shorter independent payer rights read still works.
+      payerRights=await sdk.readV2Contract(v2Address,'can_file_for',[
+        p.payer,p.network,p.txHash,v2Wallet
+      ]);
+    }
+    const policy=assessV2FilingPreflight({
+      packet:p,signer:v2Wallet,contract:v2Address,versionConfirmed:true,
+      filingStatus:state,readErrorCode,payerRights
+    });
+    if(!policy.allow)
+      throw Error('V2 filing blocked: '+String(state||policy.mode));
+    if(policy.warning)v2Message(policy.warning);
+    const consent=policy.mode==='KNOWN_UPSTREAM_RLP_RECOVERY'?
+      'GENLAYER STUDIO RPC LIMITATION: filing_status could not be read.\n'+
+      'The confirmed deployed V2 contract enforces payer authority, canonical case ID and duplicate-transfer rejection ON-CHAIN.\n'+
+      'This is not a verified READY state. A rejected TX may incur fees.\n'+
+      'You are authorizing ONE file_case transaction only; do not retry if outcome is uncertain.\n'+
+      'Case '+p.caseId+'\nPayment '+p.txHash+'\nSigner '+v2Wallet+
+      '\nContinue with one signed transaction?':
+      'Confirm ONE GenLayer V2 filing for '+p.caseId+
       '\nPayer: '+p.payer+'\nSigner: '+v2Wallet+
       '\nPayment '+p.amountAtomic+' atomic USDC · '+p.network+
-      '\nThis does not refund the payment. Approve signing?'))return;
+      '\nThis does not refund the payment. Approve signing?';
+    if(!globalThis.confirm(consent))return;
     await v2Write('file_case',p.caseId,[
       p.caseId,p.network,p.txHash,p.token,p.payer,p.payee,p.amountAtomic,
       p.endpoint,p.terms,p.delivery,p.evidence

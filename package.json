@@ -1,0 +1,20 @@
+{
+  "name": "payjury",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "x402 Base USDC payment evidence and GenLayer AI delivery adjudication",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --env-file-if-exists=.env src/server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm test && python -m py_compile contracts/PayJury.py",
+    "quote": "node scripts/inspect-x402-quote.mjs"
+  },
+  "dependencies": {
+    "genlayer-js": "1.1.8"
+  }
+}

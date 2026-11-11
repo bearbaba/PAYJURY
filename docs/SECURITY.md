@@ -21,3 +21,7 @@ Trust a configured Base RPC only to independently report on-chain EVM receipts; 
 ## Before production use
 
 Introduce API quotas and abuse protection, durable case storage, signer isolation, independent transaction finality checks, provider attestations bound cryptographically to HTTP response content, reproducible deployment, and manual security review. Do not enable public signing or paid auto-execution as a shortcut.
+
+## V2 payer authorization boundary
+
+The existing V1 contract has not enforced who may file for a Base payer. The **new proposed V2 contract is not deployed**; it requires a GenLayer signer matching the payer EVM address or an onchain payer-signed delegate authorization. This only authenticates the claimant relationship; the source does not independently verify Base settlements or x402 merchant delivery. V2 also rechecks a canonical SHA-256 case ID and limits the same referenced payment to one V2 case. Signing is disabled in the website until a *new* verified V2 address is configured. The browser uses EIP-1193; a submitted operation is locally locked, and failures after a possible broadcast must not result in automatic resubmission. No claim of full audited production security is made.

@@ -9,3 +9,4 @@ out/
 *.lock
 .vercel/
 .next/
+web/studio-wallet.bundle.js

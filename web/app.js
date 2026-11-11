@@ -24,6 +24,7 @@ form.addEventListener('submit',async event=>{
     if(body.status!=='PREPARED_NOT_FILED'||body.settlement?.result!=='BASE_USDC_TRANSFER_VERIFIED')
       throw Error('Base settlement evidence was not independently verified');
     packet=body;
+    updateV2PreparedPacket(packet);
     $('track-id').value=packet.caseId;
     $('case-id').textContent=packet.caseId;
     $('verdict').textContent='NOT FILED';
@@ -81,7 +82,8 @@ $('track-form').addEventListener('submit',async event=>{
   button.disabled=true;
   message.textContent='Reading GenLayer and independently checking the Base receipt. No signing or payment.';
   try{
-    const res=await fetch('/api/case?caseId='+encodeURIComponent(id));
+    const version=$('track-version').value;
+    const res=await fetch('/api/case?version='+encodeURIComponent(version)+'&caseId='+encodeURIComponent(id));
     const data=await res.json();
     if(!res.ok)throw Error(data.error||'Case readback unavailable');
     if(data.caseId!==id||!['FILED','DECIDED'].includes(data.caseStatus))throw Error('Unexpected case readback');
@@ -100,6 +102,7 @@ $('track-form').addEventListener('submit',async event=>{
       $('track-base-link').hidden=false;
     }
     $('track-results').hidden=false;
+    if(version==='v2')updateV2TrackedCase(data);
     const flags=[];
     if(data.settlement?.status!=='BASE_USDC_TRANSFER_VERIFIED')
       flags.push('Base receipt could not be independently verified at this time.');
@@ -112,6 +115,250 @@ $('track-form').addEventListener('submit',async event=>{
   }finally{button.disabled=false;}
 });
 $('track-example').addEventListener('click',()=>{
+  $('track-version').value='v1';
   $('track-id').value='pj_3f6b4f29a744db71c63f9acf552d2a19';
   $('track-form').requestSubmit();
+});
+
+
+/* Signed GenLayer V2 filing is strictly opt-in; V1 history never signs. */
+const V1_HISTORIC_TX='0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5';
+const WALLET_ADDR=/^0x[0-9a-f]{40}$/i;
+let v2Address=null,v2Wallet=null,v2Sdk=null,verifiedPacket=null,
+  trackedCaseV2=null, v2Busy=false;
+function v2Message(message){$('v2-status').textContent=message;}
+function v2Controls(){
+  const enabled=Boolean(v2Address);
+  $('v2-connect').disabled=!enabled||v2Busy;
+  const signed=enabled&&Boolean(v2Wallet)&&!v2Busy;
+  const prepared=Boolean(verifiedPacket)&&verifiedPacket.txHash!==V1_HISTORIC_TX;
+  $('v2-file').disabled=!signed||!prepared;
+  $('v2-authorize').disabled=!signed||!prepared||v2Wallet.toLowerCase()!==verifiedPacket.payer.toLowerCase();
+  $('v2-revoke').disabled=$('v2-authorize').disabled;
+  const pending=trackedCaseV2&&trackedCaseV2.caseStatus==='FILED'&&
+    trackedCaseV2.identityBinding==='DETERMINISTIC_ID_MATCHED'&&
+    trackedCaseV2.settlement?.status==='BASE_USDC_TRANSFER_VERIFIED'&&
+    [trackedCaseV2.claimant?.toLowerCase(),trackedCaseV2.payer?.toLowerCase()].includes(v2Wallet?.toLowerCase());
+  $('v2-adjudicate').disabled=!signed||!pending;
+  const currentCase=trackedCaseV2?.caseId||verifiedPacket?.caseId;
+  $('v2-resume').disabled=!signed||!currentCase||!(
+    signedLock(currentCase,'file_case')?.hash||
+    signedLock(currentCase,'adjudicate_case')?.hash
+  );
+}
+function updateV2PreparedPacket(next){
+  verifiedPacket=next;
+  trackedCaseV2=null;
+  if(next?.settlement?.result==='BASE_USDC_TRANSFER_VERIFIED'){
+    $('v2-overview').hidden=false;
+    $('v2-case').textContent=next.caseId;
+    $('v2-payment').textContent=next.amountAtomic+' atomic USDC · '+next.network;
+    v2Message(next.txHash===V1_HISTORIC_TX?
+      'This historic payment was already filed and decided in V1. Do not file it again.':
+      v2Address?'Base payment independently verified. Connect a GenLayer wallet and review filing rights.':
+      'Evidence is prepared, but V2 has not been deployed and verified. Signing stays disabled.');
+  }
+  v2Controls();
+}
+function updateV2TrackedCase(data){
+  trackedCaseV2=data;
+  if(v2Address&&data.caseStatus==='FILED'){
+    v2Message('V2 case is FILED. The claimant or payer can request a GenLayer AI decision.');
+  } else if(data.caseStatus==='DECIDED'){
+    v2Message('V2 verdict already persisted. No further adjudication transaction is necessary.');
+  }
+  v2Controls();
+}
+function lockKey(caseId,method){
+  return 'payjury:v2:'+v2Address?.toLowerCase()+':'+caseId+':'+method;
+}
+function signedLock(caseId,method){
+  try{
+    const stored=globalThis.localStorage?.getItem(lockKey(caseId,method));
+    return stored?JSON.parse(stored):null;
+  }catch{return {state:'STORAGE_UNAVAILABLE'};}
+}
+function writeLock(caseId,method,value){
+  globalThis.localStorage.setItem(lockKey(caseId,method),JSON.stringify(value));
+}
+async function getV2Sdk(){
+  if(!v2Sdk)v2Sdk=await import('/studio-wallet.bundle.js');
+  return v2Sdk;
+}
+async function refreshRecordedTransaction(caseId,method,hash){
+  const sdk=await getV2Sdk();
+  const state=await sdk.checkV2Transaction(hash);
+  if(!state.finalized){
+    v2Message(method+' submitted · '+hash+'. Current GenLayer state: '+
+      state.status+'. No second signing is allowed. Refresh recorded TX for updates.');
+    return false;
+  }
+  if(!state.success){
+    v2Message('GenLayer transaction finalized but execution was not successful: '+state.execution+
+      '. Keep the TX hash and inspect Explorer. Do not resend.');
+    return false;
+  }
+  v2Message('GenLayer TX FINALIZED / SUCCESS: '+hash+'. Checking contract readback…');
+  await refreshV2Readback(caseId);
+  return true;
+}
+async function refreshV2Readback(caseId){
+  try{
+    const response=await fetch('/api/case?version=v2&caseId='+encodeURIComponent(caseId));
+    if(!response.ok)throw Error('GenLayer case readback not yet available');
+    const result=await response.json();
+    if(result.caseId!==caseId)throw Error('Case readback ID mismatch');
+    updateV2TrackedCase(result);
+    $('track-version').value='v2';
+    $('track-id').value=caseId;
+    $('track-form').requestSubmit();
+    v2Message(result.caseStatus==='DECIDED'?
+      'AI verdict confirmed from V2: '+result.verdict+'. No more signing required.':
+      'V2 filing confirmed on-chain. Case status FILED; choose Request AI decision after reviewing evidence.');
+  }catch{
+    v2Message('TX is finalized, but contract readback is unavailable. Preserve the hash and use Refresh recorded TX. Never submit again.');
+  }
+}
+async function monitorSubmitted(caseId,method,hash){
+  for(let step=0;step<12;step++){
+    let success=false;
+    try{success=await refreshRecordedTransaction(caseId,method,hash);}
+    catch{
+      v2Message('GenLayer read unavailable; submitted TX '+hash+' remains locked. Never sign the same action again.');
+    }
+    if(success)return;
+    if(step<11)await new Promise(resolve=>setTimeout(resolve,2500));
+  }
+}
+async function v2Write(method,caseId,args){
+  if(!v2Address||!v2Wallet||v2Busy)throw Error('V2 contract and connected wallet required');
+  const existing=signedLock(caseId,method);
+  if(existing)throw Error(existing.hash?
+    'This action already has a TX: '+existing.hash+'. Use Refresh recorded TX; do not sign again.':
+    'An earlier write attempt has an unknown outcome. Review wallet activity before any resubmission.');
+  const sdk=await getV2Sdk();
+  v2Busy=true;v2Controls();
+  try{
+    // Lock BEFORE writeContract. If no hash comes back, never assume failure.
+    writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN',when:new Date().toISOString()});
+    const hash=await sdk.sendV2Write(v2Address,method,args);
+    writeLock(caseId,method,{state:'SUBMITTED',hash,when:new Date().toISOString()});
+    v2Message(method+' submitted: '+hash+'. Checking GenLayer finality without resending.');
+    await monitorSubmitted(caseId,method,hash);
+  }catch(error){
+    const explicitlyRejected=error?.code===4001||
+      error?.cause?.code===4001||
+      /user rejected|user denied|user cancelled/i.test(String(error?.shortMessage||''));
+    if(explicitlyRejected){
+      // EIP-1193 explicit rejection means no wallet signature/broadcast occurred.
+      globalThis.localStorage.removeItem(lockKey(caseId,method));
+      v2Message('Wallet rejected the signing request. No new GenLayer transaction was authorized.');
+    }else{
+      v2Message('Signing/confirmation outcome uncertain: '+
+        String(error?.shortMessage||error?.message||'unknown').slice(0,120)+
+        '. Write remains locked. Check wallet activity and recorded transaction first.');
+    }
+  }finally{v2Busy=false;v2Controls();}
+}
+fetch('/api/status').then(r=>r.json()).then(data=>{
+  const a=String(data.genlayerV2ContractAddress||'');
+  if(data.v2FilingEnabled&&WALLET_ADDR.test(a)&&
+    a.toLowerCase()!=='0xd57a04c3cc304ab30c9435a9ae34a840802f11c8'){
+    v2Address=a;
+    $('v2-mode').textContent='V2 · Wallet approvals';
+    $('v2-explanation').textContent='Verified Base transfer first, then connect your own GenLayer Studionet wallet. Direct payer filing or payer-approved delegation only; each write requires your confirmation.';
+    v2Message('V2 contract is configured. This is NOT proof of deployment or security audit; verify the actual contract source and address before signing.');
+  }else{
+    $('v2-mode').textContent='V2 · Not deployed';
+    $('v2-explanation').textContent='PAYJURY V2 adds payer/delegate authorization. Until its new address is separately deployed and verified, signing stays disabled; the completed V1 case remains readable above.';
+  }
+  v2Controls();
+}).catch(()=>{
+  v2Message('Cannot verify V2 configuration. All GenLayer signing controls stay disabled.');
+});
+$('v2-connect').addEventListener('click',async()=>{
+  $('v2-connect').disabled=true;
+  try{
+    const sdk=await getV2Sdk();
+    const address=await sdk.connectGenLayerWallet();
+    v2Wallet=address;
+    $('v2-signer').textContent=address;
+    v2Message('Connected '+address+' on GenLayer Studionet. Before filing, the contract will independently verify signer authorization.');
+  }catch(error){
+    v2Wallet=null;
+    v2Message(String(error?.shortMessage||error?.message||'Wallet unavailable').slice(0,200));
+  }finally{v2Controls();}
+});
+$('v2-file').addEventListener('click',async()=>{
+  if(!verifiedPacket||!v2Address||!v2Wallet)return;
+  const p=verifiedPacket;
+  if(p.txHash===V1_HISTORIC_TX){
+    v2Message('Historic V1 paid case is already decided. No repeat filing.');return;
+  }
+  if(p.settlement?.result!=='BASE_USDC_TRANSFER_VERIFIED'){
+    v2Message('Independent Base payment verification required.');return;
+  }
+  try{
+    const body=Object.fromEntries(new FormData(form));
+    const fresh=await fetch('/api/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    if(!fresh.ok)throw Error('Fresh Base verification unavailable. Signing blocked.');
+    const again=await fresh.json();
+    if(again.caseId!==p.caseId||again.settlement?.result!=='BASE_USDC_TRANSFER_VERIFIED')
+      throw Error('Case evidence changed since verification. Verify again.');
+    const sdk=await getV2Sdk();
+    const state=await sdk.readV2Contract(v2Address,'filing_status',[
+      p.caseId,p.network,p.txHash,p.token,p.payer,p.payee,p.amountAtomic,v2Wallet
+    ]);
+    if(state!=='READY_REQUIRES_BASE_PROOF')
+      throw Error('V2 filing blocked: '+String(state));
+    if(!globalThis.confirm('Confirm ONE GenLayer V2 filing for '+p.caseId+
+      '\nPayer: '+p.payer+'\nSigner: '+v2Wallet+
+      '\nPayment '+p.amountAtomic+' atomic USDC · '+p.network+
+      '\nThis does not refund the payment. Approve signing?'))return;
+    await v2Write('file_case',p.caseId,[
+      p.caseId,p.network,p.txHash,p.token,p.payer,p.payee,p.amountAtomic,
+      p.endpoint,p.terms,p.delivery,p.evidence
+    ]);
+  }catch(error){v2Message(String(error?.message||'Preflight failed').slice(0,200));}
+});
+async function authorizeDelegate(enabled){
+  if(!v2Wallet||!verifiedPacket||v2Wallet!==verifiedPacket.payer.toLowerCase()){
+    v2Message('Only the payer wallet can authorize/revoke a delegate.');return;
+  }
+  const delegate=$('v2-delegate').value.trim().toLowerCase();
+  if(!WALLET_ADDR.test(delegate)||delegate===v2Wallet){
+    v2Message('Enter a different valid 0x delegate wallet address.');return;
+  }
+  if(!globalThis.confirm((enabled?'Authorize ':'Revoke ')+delegate+
+    ' for V2 filing? This sends a real GenLayer transaction.'))return;
+  const action=enabled?'delegate_enable_'+delegate:'delegate_revoke_'+delegate;
+  await v2Write('set_delegate',verifiedPacket.caseId+':'+action,[delegate,enabled]);
+}
+$('v2-authorize').addEventListener('click',()=>authorizeDelegate(true));
+$('v2-revoke').addEventListener('click',()=>authorizeDelegate(false));
+$('v2-adjudicate').addEventListener('click',async()=>{
+  const data=trackedCaseV2;
+  if(!data||!v2Wallet||!v2Address||data.caseStatus!=='FILED')return;
+  if(![data.claimant?.toLowerCase(),data.payer?.toLowerCase()].includes(v2Wallet))return;
+  if(data.identityBinding!=='DETERMINISTIC_ID_MATCHED'||
+    data.settlement?.status!=='BASE_USDC_TRANSFER_VERIFIED')return;
+  try{
+    const sdk=await getV2Sdk();
+    let record=await sdk.readV2Contract(v2Address,'get_case',[data.caseId]);
+    if(typeof record==='string')record=JSON.parse(record);
+    if(record?.status!=='FILED'||record.case_id!==data.caseId)
+      throw Error('Case is not FILED. Cannot request another AI decision.');
+    if(!globalThis.confirm('Request ONE AI adjudication for '+data.caseId+
+      '? This GenLayer write is not a refund.'))return;
+    await v2Write('adjudicate_case',data.caseId,[data.caseId]);
+  }catch(error){v2Message(String(error?.message||'AI request unavailable').slice(0,200));}
+});
+$('v2-resume').addEventListener('click',async()=>{
+  const id=trackedCaseV2?.caseId||verifiedPacket?.caseId;
+  if(!id||!v2Address||!v2Wallet)return;
+  for(const action of ['file_case','adjudicate_case']){
+    const existing=signedLock(id,action);
+    if(existing?.hash){await refreshRecordedTransaction(id,action,existing.hash);return;}
+  }
+  v2Message('No recorded transaction hash for this case. Check the signing wallet before any new operation.');
 });

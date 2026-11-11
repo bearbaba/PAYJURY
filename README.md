@@ -129,3 +129,14 @@ BASE_RPC_URL=https://sepolia.base.org npm run case:prepare
 ```
 
 Read [the first paid case runbook](docs/FIRST_PAID_CASE.md). The command exports a case packet to `out/` for inspection; it never signs or files. Filing and adjudication require separate manual Studio operations and real finalized GenVM receipts.
+
+## First full x402 → GenLayer AI verdict — VERIFIED TESTNET E2E
+
+On **11 November 2026**, PAYJURY processed one genuine 0.01 test USDC x402 paid request on Base Sepolia, verified the USDC transfer, filed the case on GenLayer Studionet, and reached a persisted **`DECIDED / ACCEPT`** AI verdict under Normal consensus (5 initial validators). This establishes the **first one-case testnet happy path**, not production readiness or API payload quality verification.
+
+- **Base payment:** [`0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5`](https://sepolia.basescan.org/tx/0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5)
+- **GenLayer filing:** [`0x5df370a062f304074921e6af521f579cc074ef44a48a28f0174aad729fc418df`](https://explorer-studio.genlayer.com/tx/0x5df370a062f304074921e6af521f579cc074ef44a48a28f0174aad729fc418df) — FINALIZED / SUCCESS
+- **AI adjudication:** [`0x0e5906d5bb3dcc939f076807289deff7e8c39f4f2b9f1574cb8b67a9dbc13057`](https://explorer-studio.genlayer.com/tx/0x0e5906d5bb3dcc939f076807289deff7e8c39f4f2b9f1574cb8b67a9dbc13057) — FINALIZED / SUCCESS / Consensus Accepted
+- **Case:** `pj_3f6b4f29a744db71c63f9acf552d2a19` — Studio readback: `DECIDED`, `ACCEPT` with recorded rationale. The verdict evaluated the narrow payment-and-HTTP-receipt claim; original API response body was not retained.
+
+[Full evidence ledger, verdict rationale, and limits](docs/ACCEPTANCE.md).

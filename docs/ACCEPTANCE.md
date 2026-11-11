@@ -74,3 +74,26 @@ The operator completed a single approved PayAI Echo Base Sepolia purchase throug
 - Still pending: exact case `file_case` and `adjudicate_case` FINALIZED + GenVM SUCCESS, stable `get_case=DECIDED` readback; full product-quality acceptance remains incomplete.
 
 **Critical:** this is a paid Echo service test, not proof of provider misconduct, content quality or a refund. Keep the original one-shot marker; never trigger a second payment to improve the presentation.
+
+## E2E GenLayer verdict confirmed — 2026-11-11 (user-provided Studio/Explorer readback)
+
+PAYJURY's original **0.01 test USDC x402 Base Sepolia paid request** was used to file and adjudicate **one actual GenLayer Studionet 61999 case**, with no second payment:
+
+| Step | Actual evidence | Result |
+| --- | --- | --- |
+| x402 payment | [Base Sepolia USDC transfer `0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5`](https://sepolia.basescan.org/tx/0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5) | PAYJURY one-shot client independently verified 10,000 atomic USDC and 10 confirmations at observation |
+| GenLayer contract | [Deployment `0x2703920edd2a717344dddd1617c4ae7cddc6e5ed30aadb077c4ddb5c70bd399e`](https://explorer-studio.genlayer.com/tx/0x2703920edd2a717344dddd1617c4ae7cddc6e5ed30aadb077c4ddb5c70bd399e) | FINALIZED / GenVM SUCCESS |
+| `file_case` | [GenLayer TX `0x5df370a062f304074921e6af521f579cc074ef44a48a28f0174aad729fc418df`](https://explorer-studio.genlayer.com/tx/0x5df370a062f304074921e6af521f579cc074ef44a48a28f0174aad729fc418df) | FINALIZED / GenVM SUCCESS / Consensus Accepted; all 11 case fields match locally prepared case |
+| Readback after filing | Studio `get_case` reported `status=FILED`, `verdict=PENDING`, exact Base payment hash and claimant `0x4C7cb73aC8F8999af21cfc9fF4cF2333a9508Dcb` | FILED confirmed via user-provided live readback |
+| `adjudicate_case` | [GenLayer TX `0x0e5906d5bb3dcc939f076807289deff7e8c39f4f2b9f1574cb8b67a9dbc13057`](https://explorer-studio.genlayer.com/tx/0x0e5906d5bb3dcc939f076807289deff7e8c39f4f2b9f1574cb8b67a9dbc13057) | FINALIZED / GenVM SUCCESS / Consensus Accepted; Normal execution with 5 initial validators |
+| Readback after decision | Studio `get_case` returned `status=DECIDED`, `verdict=ACCEPT` and nonempty `reason` | GenLayer adjudication and persisted verdict observed |
+
+**Case ID:** `pj_3f6b4f29a744db71c63f9acf552d2a19`.
+
+**Actual on-chain reason, transcribed from user-provided `get_case` readback:**
+
+> Evidence supports the narrow claim: an exact 0.01 USDC Base Sepolia quote for the identified merchant was selected, and the client reported an HTTP 2xx response with a nonempty body after payment. Although the raw body was not retained, payload correctness is out of scope and the existence of a nonempty payload is substantiated.
+
+**Scope and limitations (must not overstate):** `ACCEPT` is the **case's actual adjudication verdict**, not a blanket validator certification of the merchant, API data correctness or the PAYJURY product. The original HTTP response bytes were not retained; delivery evidence relied on the client report and locally calculated body SHA-256. The GenLayer execution's `Consensus Accepted` is distinct from the case `verdict=ACCEPT`. This is a complete **single-case testnet E2E happy path**; not evidence of production mainnet operation, refunds, automated filing/settlement, comprehensive adversarial adjudication, or all users' wallet compatibility. The signer `0x4C7cb73aC8F8999af21cfc9fF4cF2333a9508Dcb` differed from the Base payer `0xd6b8a3a5eb329410d9504784812b8569afa8c2af`, demonstrating that filing can succeed with distinct wallets; this is not proof of claim ownership/authorization.
+
+**No more paid x402 calls or GenLayer writes are needed for this case.** Preserve these public hashes and the readback as evidence; avoid duplicate signed transactions.

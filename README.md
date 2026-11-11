@@ -97,3 +97,7 @@ npm run contract:verify
 The command checks finalized contract code via the official Studionet RPC (`gen_getContractCode`) and compares its source to the repository's `contracts/PayJury.py`. It performs **no signed actions**. `SOURCE_MATCHED_FINALIZED_STATE` means the code is visible at that address in finalized chain state. It is **not** a substitute for checking the original deployment TX hash / GenVM success in the Explorer. A mismatched or unavailable code read must not unlock GenLayer writes or be reported as deployed.
 
 Only after verifying both source and deployment TX should you set `GENLAYER_CONTRACT_ADDRESS` locally in `.env` and restart the web server; the web remains read-only.
+
+### If deployment verification is unverified
+
+Run `npm run contract:verify` after pulling the latest main branch. The CLI prints a **sanitized** `PAYJURY_DEPLOYMENT_DIAGNOSTIC` with `errorCode`, optional numeric `httpStatus` and `rpcCode`. It never prints raw RPC response messages, credentials, transaction payloads or private data. `RPC_METHOD_UNSUPPORTED` means the requested method was unavailable; `RPC_HTTP_ERROR` means HTTP rejected the call; `RPC_REJECTED_FINALIZED_CODE_READ` means the RPC rejected the query (which may mean missing/unfinalized contract or other provider failure). No single such code proves the contract failed deployment. A confirmed code match still requires a real deployment transaction and GenVM receipt.

@@ -77,18 +77,28 @@ test('resume-known rejects receipt mismatch; no false payment acceptance',async(
     await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
   }
 });
-test('V2 wallet write fee simulation is completed before browser attempt lock',async()=>{
+test('V2 wallet uses REAL genlayer-js 1.1.8 supported writer, never unsupported fee estimator',async()=>{
+  const [{createClient,createAccount},{studionet}]=await Promise.all([
+    import('genlayer-js'),import('genlayer-js/chains')
+  ]);
+  const client=createClient({chain:studionet,account:createAccount('0x'+'11'.repeat(32))});
+  assert.equal(typeof client.writeContract,'function');
+  assert.equal(typeof client.estimateTransactionFeesForWrite,'undefined');
   const studio=await readFile(new URL('../web/studio-wallet.mjs',import.meta.url),'utf8');
   const app=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
   const html=await readFile(new URL('../web/index.html',import.meta.url),'utf8');
-  assert.match(studio,/export async function estimateV2WriteFees\(/);
-  assert.match(studio,/export async function sendV2Write\(address,fn,args,estimatedFees\)/);
+  assert.match(studio,/export async function preflightV2Write\(/);
+  assert.match(studio,/export async function sendV2Write\(address,fn,args,preparedWrite\)/);
+  assert.match(studio,/writeClient\.writeContract\(preparedWrite\)/);
+  assert.match(studio,/value:0n/);
+  assert.doesNotMatch(studio,/writeClient\.estimateTransactionFeesForWrite\(/);
+  assert.doesNotMatch(studio,/fees:estimatedFees/);
   const start=app.indexOf('async function v2Write(');
-  const source=app.slice(start,app.indexOf('fetch(\'/api/status\')',start));
-  const estimateAt=source.indexOf('sdk.estimateV2WriteFees(');
+  const source=app.slice(start,app.indexOf("fetch('/api/status')",start));
+  const preflightAt=source.indexOf('sdk.preflightV2Write(');
   const lockAt=source.indexOf("writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN'");
   const writeAt=source.indexOf('sdk.sendV2Write(');
-  assert.ok(estimateAt>=0&&lockAt>estimateAt&&writeAt>lockAt);
+  assert.ok(preflightAt>=0&&lockAt>preflightAt&&writeAt>lockAt);
   assert.match(app,/\/api\/v2\/resume-known/);
   assert.match(html,/id="v2-restore-paid"/);
 });

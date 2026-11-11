@@ -105,7 +105,9 @@ $('copy-case').addEventListener('click',async()=>{
 fetch('/api/status').then(res=>res.json()).then(data=>{
   if(data.hostedReadOnly){
     const fresh=$('v2-fresh-purchase-panel');
+    const historicRestore=$('v2-case-restore-panel');
     if(fresh)fresh.hidden=true;
+    if(historicRestore)historicRestore.hidden=true;
   }
   if(!data.paymentVerifierConfigured){
     display('CONFIGURATION REQUIRED','Base RPC not configured',
@@ -259,8 +261,11 @@ function v2Controls(){
   const enabled=Boolean(v2Address);
   $('v2-connect').disabled=!enabled||v2Busy;
   const signed=enabled&&Boolean(v2Wallet)&&!v2Busy;
-  const prepared=Boolean(verifiedPacket)&&verifiedPacket.txHash!==V1_HISTORIC_TX;
-  $('v2-file').disabled=!signed||!prepared;
+  const decidedHistorical=verifiedPacket?.caseId===VERIFIED_V2_CASE;
+  const alreadyFiled=Boolean(trackedCaseV2&&trackedCaseV2.caseId===verifiedPacket?.caseId&&
+    ['FILED','DECIDED'].includes(trackedCaseV2.caseStatus));
+  const prepared=Boolean(verifiedPacket)&&verifiedPacket.txHash!==V1_HISTORIC_TX&&!decidedHistorical;
+  $('v2-file').disabled=!signed||!prepared||alreadyFiled;
   $('v2-authorize').disabled=!signed||!prepared||v2Wallet.toLowerCase()!==verifiedPacket.payer.toLowerCase();
   $('v2-revoke').disabled=$('v2-authorize').disabled;
   const pending=trackedCaseV2&&trackedCaseV2.caseStatus==='FILED'&&
@@ -292,6 +297,8 @@ function updateV2PreparedPacket(next){
     $('v2-payment').textContent=next.amountAtomic+' atomic USDC · '+next.network;
     v2Message(next.txHash===V1_HISTORIC_TX?
       'This historic payment was already filed and decided in V1. Do not file it again.':
+      next.caseId===VERIFIED_V2_CASE?
+        'The completed V2 case must be tracked read-only. Filing and adjudication are disabled for this case.':
       v2Address?'Base payment independently verified. Connect a GenLayer wallet and review filing rights.':
       'Evidence is prepared, but V2 has not been deployed and verified. Signing stays disabled.');
   }

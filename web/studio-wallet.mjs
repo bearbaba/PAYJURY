@@ -1,6 +1,6 @@
 // Browser-only GenLayer Studionet 61999 wallet adapter.
 // Uses the user's EIP-1193 extension. No secrets or server-held signer.
-import {createClient,isSuccessful} from 'genlayer-js';
+import {createClient} from 'genlayer-js';
 import {studionet} from 'genlayer-js/chains';
 
 const ADDRESS=/^0x[0-9a-f]{40}$/i;
@@ -48,8 +48,12 @@ export async function sendV2Write(address,fn,args){
 export async function checkV2Transaction(hash){
   if(!TX.test(hash))throw Error('Invalid GenLayer transaction hash');
   const tx=await readClient.getTransaction({hash});
-  const finished=tx?.statusName==='FINALIZED'||tx?.lifecycle==='finalized';
+  const finished=String(tx?.statusName||'').toUpperCase()==='FINALIZED';
+  const execution=String(tx?.txExecutionResultName||'').toUpperCase().replace(/[^A-Z]/g,'');
+  const code=typeof tx?.txExecutionResult==='bigint'?Number(tx.txExecutionResult):tx?.txExecutionResult;
+  // genlayer-js 1.1.8 does NOT export isSuccessful; check actual GenVM receipt.
+  const success=finished&&(execution==='FINISHEDWITHRETURN'||code===1);
   return {hash,status:tx?.statusName||'UNKNOWN',
     execution:tx?.txExecutionResultName||'UNKNOWN',
-    finalized:finished,success:finished&&isSuccessful(tx)};
+    finalized:finished,success};
 }

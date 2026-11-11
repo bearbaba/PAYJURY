@@ -4,7 +4,7 @@
 
 PAYJURY is a non-custodial, evidence-first dispute lab for paid AI/API services. It connects the **x402 HTTP payment standard** with **GenLayer Intelligent Contracts** through a minimal **Pay → Dispute → Verdict** experience.
 
-> **Build status: foundation, not a verified E2E demonstration.** The web UI, read-only Base settlement verifier, and guarded official x402 SDK payer CLI are implemented, but a PAYJURY-specific paid transaction is not yet verified. A dedicated GenLayer contract source is included but is **not deployed by this repository**. An independently verified payment plus a finalized GenLayer case is still required before making full partner-demo claims. **9.5/10 is an internal quality target, not a confirmed jury score.**
+> **Live acceptance, 11 Nov 2026:** The first **testnet x402 → Base USDC Transfer → GenLayer case filing → AI verdict** was completed: `DECIDED / ACCEPT` with public transactions. The website is a **read-only case tracker** and proof builder, not yet an integrated signer. The original HTTP response bytes were not preserved; claimant authorization and production readiness remain open. **9.5/10 is an internal quality target, not a jury score.**
 
 ## Why PAYJURY
 
@@ -12,7 +12,7 @@ An HTTP 402 payment is only half the story. A machine can pay an API and receive
 
 1. **PAY** — Inspect the actual x402 v2 `PAYMENT-REQUIRED` challenge (exact Base USDC options only). Verify the USDC transfer independently from a Base RPC receipt. Optional `PAYMENT-RESPONSE` is checked against the same transaction, but never trusted by itself.
 2. **DISPUTE** — Bind payment reference, buyer, merchant, API endpoint, immutable acceptance terms, delivery and evidence into a deterministic case ID. The resulting packet is explicitly `PREPARED_NOT_FILED`.
-3. **VERDICT** — Deploy `contracts/PayJury.py` to **GenLayer Studionet (chain ID 61999)**. Once a case is actually filed and adjudicated, the web can perform a read-only `get_case`. A `DECIDED` readback alone does not replace explicit TX finality/GenVM receipt checks.
+3. **VERDICT** — The original contract has been deployed to **GenLayer Studionet 61999** and has actually returned `DECIDED / ACCEPT` for one paid case. The web can look up any valid case ID with `/api/case` and separately recheck Base settlement. It never signs or files cases; GenLayer TX finality still requires Explorer proof.
 
 No OpenServ Agent runtime or Human Assistance dependency is involved.
 
@@ -25,7 +25,7 @@ No OpenServ Agent runtime or Human Assistance dependency is involved.
 | `decodeX402PaymentResponse` | Checks merchant/facilitator-provided header against transaction ID and network. **A header is not a chain proof.** |
 | `src/server.mjs` | Read-only verification API and optional GenLayer `get_case` read. Never holds a signing key. |
 | `contracts/PayJury.py` | Immutable filing and independent AI validator adjudication for `ACCEPT`, `REWORK`, `UNVERIFIABLE`. The GenLayer contract **does not independently prove Base settlement**. |
-| `web/` | Responsive three-step case interface. Never claims a prepared packet is filed or a placeholder verdict is real. |
+| `web/` | Responsive proof builder and read-only live case tracker. Clear separation between GenLayer readback, independently verified Base receipt, and unverified provenance. |
 | `tests/` | Forged receipt, wrong chain, bad amount, conflicting quote and no-RPC fail-closed tests. |
 
 ## Local start
@@ -42,6 +42,13 @@ npm run dev
 ```
 
 Open **http://127.0.0.1:4173**.
+
+### Track a real filed case without a wallet
+
+Set `GENLAYER_CONTRACT_ADDRESS=0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8` in your private `.env` (provided as the safe public default in `.env.example`). Keep `BASE_RPC_URL=https://sepolia.base.org` for the first verified test. Start `npm run dev` and use the **On-chain Case Tracker** with Case ID `pj_3f6b4f29a744db71c63f9acf552d2a19`, or click **Load verified testnet case**. This performs only GenLayer and Base **reads**. `/api/case` distinguishes contract readback, deterministic ID match and verified vs unavailable Base receipt; it does not infer client authorization or transaction finality.
+
+The older three-step proof builder remains **read-only**: to file new cases, authorized GenLayer wallet writes still take place separately. The first paid case is complete and **must not** be re-submitted.
+
 
 The example `BASE_RPC_URL` points to **Base Sepolia**. To verify a Base mainnet transfer, configure a trusted HTTPS **Base mainnet** RPC instead; the code checks `eth_chainId` and refuses mismatched networks. The page does not create or send a payment. You must obtain real transaction evidence independently.
 
@@ -79,28 +86,16 @@ No escrow, bridge, automatic refund, permissionless debt collection, or legally 
 
 ## Optional real x402 payment client
 
-The official x402 SDK is wired in `scripts/pay-x402-testnet.mjs`, with exact Base Sepolia USDC, an approved merchant, **0.01 test USDC maximum**, EIP-3009-only policy and a permanent one-shot marker. This CLI **may spend actual testnet USDC** and has **not** been executed as PAYJURY acceptance. The public web never pays or signs. Read [Live x402 client safety](docs/X402_LIVE_CLIENT.md) before any live attempt.
+The official x402 SDK in `scripts/pay-x402-testnet.mjs` has already executed **one authorized 0.01 Base Sepolia test USDC** payment on 11 Nov 2026 (public TX below). Its permanent one-shot marker must **never be removed or bypassed**. The public website never pays or signs. Read [Live x402 client safety](docs/X402_LIVE_CLIENT.md).
 
 ## Agent workflow & presentation
 
 - [PAYJURY agent skill](SKILL.md): quote → independent payment verification → immutable dispute → GenLayer readback, with fail-closed response states.
 - [45-second truthful demo guide](docs/DEMO_45S.md): storyboard and real transaction proof requirements.
 
-## Verify a proposed Studionet deployment (read-only)
+## Existing Studionet contract — keep v1 stable
 
-The candidate Studio import URL supplied on 11 Nov 2026 contains address `0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8`. This is a **candidate, not yet verified by this repository**. Run:
-
-```bash
-npm run contract:verify
-```
-
-The command checks finalized contract code via the official Studionet RPC (`gen_getContractCode`) and compares its source to the repository's `contracts/PayJury.py`. It performs **no signed actions**. `SOURCE_MATCHED_FINALIZED_STATE` means the code is visible at that address in finalized chain state. It is **not** a substitute for checking the original deployment TX hash / GenVM success in the Explorer. A mismatched or unavailable code read must not unlock GenLayer writes or be reported as deployed.
-
-Only after verifying both source and deployment TX should you set `GENLAYER_CONTRACT_ADDRESS` locally in `.env` and restart the web server; the web remains read-only.
-
-### If deployment verification is unverified
-
-Run `npm run contract:verify` after pulling the latest main branch. The CLI prints a **sanitized** `PAYJURY_DEPLOYMENT_DIAGNOSTIC` with `errorCode`, optional numeric `httpStatus` and `rpcCode`. It never prints raw RPC response messages, credentials, transaction payloads or private data. `RPC_METHOD_UNSUPPORTED` means the requested method was unavailable; `RPC_HTTP_ERROR` means HTTP rejected the call; `RPC_REJECTED_FINALIZED_CODE_READ` means the RPC rejected the query (which may mean missing/unfinalized contract or other provider failure). No single such code proves the contract failed deployment. A confirmed code match still requires a real deployment transaction and GenVM receipt.
+The deployed PAYJURY v1 contract is `0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8` on Studionet 61999. The [deployment transaction](https://explorer-studio.genlayer.com/tx/0x2703920edd2a717344dddd1617c4ae7cddc6e5ed30aadb077c4ddb5c70bd399e) and its subsequent successful filing and adjudication establish real execution. `npm run contract:verify` may still report finalized-code-read error `-32603` from a GenLayer RPC issue; that does **not** disprove the deployment. An exact source hash match remains unverified. Do **not** redeploy v1 or repeat its transactions.
 
 ## Operator-observed PAYJURY deployment — 11 Nov 2026
 
@@ -118,17 +113,13 @@ After configuring an explicit Base Sepolia provider, exact merchant and **a dedi
 
 The separately approved paid CLI now logs `PAYJURY_X402_REPORTED_SETTLEMENT` with a public transaction hash as soon as it receives a matching PAYMENT-RESPONSE, **before** limited read-only receipt polling. A pending confirmation does not trigger another signed payment. The one-shot marker remains permanent even if readback times out. See [live client runbook](docs/X402_LIVE_CLIENT.md).
 
-## First real PAYJURY x402 payment — November 11, 2026
-
-The operator reported a **successful one-shot x402 V2 payment on Base Sepolia**, after a funded testnet-wallet preflight. PAYJURY independently verified the exact Base USDC Transfer via RPC and recorded [TX `0x2f5380...ef4d5`](https://sepolia.basescan.org/tx/0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5), amount `10000` atomic USDC, block `57288759` and **10 confirmations** at observation. The client also recorded a hash of the HTTP response body but **did not retain the body bytes**. This proves payment settlement and receipt of a response for this test; it is not a full API-content-quality judgment or a completed GenLayer E2E case.
-
-**Do not pay again.** For an independent read-only receipt check and the original GenLayer filing fields, run:
+## Re-check the historical paid case without paying again
 
 ```bash
 BASE_RPC_URL=https://sepolia.base.org npm run case:prepare
 ```
 
-Read [the first paid case runbook](docs/FIRST_PAID_CASE.md). The command exports a case packet to `out/` for inspection; it never signs or files. Filing and adjudication require separate manual Studio operations and real finalized GenVM receipts.
+This command rechecks the existing verified Base payment and exports the original 11 GenLayer case fields locally. The case is **already filed and decided**, so the output is archival evidence, **not permission to file or adjudicate again**. See [the completed case runbook](docs/FIRST_PAID_CASE.md).
 
 ## First full x402 → GenLayer AI verdict — VERIFIED TESTNET E2E
 

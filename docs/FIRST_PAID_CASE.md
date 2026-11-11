@@ -1,5 +1,6 @@
 # PAYJURY — First independently verified x402 payment → GenLayer Studio case
 
+> **COMPLETED CASE — DO NOT REPLAY:** `pj_3f6b4f29a744db71c63f9acf552d2a19` was already filed via [GenLayer TX `0x5df370a0...`](https://explorer-studio.genlayer.com/tx/0x5df370a062f304074921e6af521f579cc074ef44a48a28f0174aad729fc418df) and adjudicated via [GenLayer TX `0x0e5906d5...`](https://explorer-studio.genlayer.com/tx/0x0e5906d5bb3dcc939f076807289deff7e8c39f4f2b9f1574cb8b67a9dbc13057), with a persisted `DECIDED / ACCEPT` readback. The historical Stage 2 below describes **completed actions**, not a request to send new transactions. There is no reason to pay or sign again for this case.\n\n
 ## Recorded operator evidence, 11 November 2026
 
 One paid request was executed by the PAYJURY Codespaces one-shot x402 CLI against [PayAI Echo Base Sepolia paid content](https://x402.payai.network/api/base-sepolia/paid-content). The paid client reported `PAYJURY_X402_REPORTED_SETTLEMENT` followed by `PAYJURY_X402_PAYMENT_AND_TRANSFER_VERIFIED`.
@@ -33,7 +34,7 @@ node -e 'const fs=require("fs");const p=fs.readdirSync("out").filter(x=>/^pj_[0-
 
 Only submit the fields of **this actual packet** into [the previously deployed PAYJURY GenLayer Studio contract](https://studio.genlayer.com/?import-contract=0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8). Do not paste private keys, headers containing signed payment authorizations or secrets into Studio.
 
-## Stage 2 — GenLayer Studio (manual write authorization)
+## Stage 2 — GenLayer Studio (historical completed write actions, not to be replayed)
 
 Read the `fileCase.fields` object, then open `file_case`. Enter the exact **11** displayed fields, in the order shown, and confirm the contract address is `0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8`. One operator-controlled signed filing maximum. Record the exact transaction hash.
 

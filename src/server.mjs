@@ -87,7 +87,9 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
           respond(res,503,{error:'V2 contract not configured. Read-only v1 available.'});return;
         }
         try{
-          respond(res,200,await trackFiledCase(caseId,{readCase:id=>caseReader(id,address),verifyTransfer,rpcUrl}));
+          const tracked=await trackFiledCase(caseId,{readCase:id=>caseReader(id,address),verifyTransfer,rpcUrl});
+          respond(res,200,{...tracked,contractVersion:version,
+            contractAddress:/^0x[0-9a-f]{40}$/i.test(address||'')?address:null});
         }catch{
           respond(res,422,{error:'GenLayer case readback unavailable or invalid. No verdict can be inferred.'});
         }

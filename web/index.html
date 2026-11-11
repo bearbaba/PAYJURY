@@ -85,6 +85,7 @@
           </div>
           <div class="fields"><label>Paid API endpoint<input name="endpoint" placeholder="https://api.example.com/paid-resource" required maxlength="400"></label>
           <label>Transaction hash<input name="txHash" placeholder="0x… confirmed Base transaction" required maxlength="66"></label></div>
+          <div class="autofill-row"><button type="button" id="autofill-transfer">Detect USDC transfer from TX</button><span id="autofill-status" role="status" aria-live="polite">Read-only Base receipt lookup. Automatically fills payer, merchant, amount and token; never pays or signs.</span></div>
           <div class="fields two"><label>Buyer wallet<input name="payer" placeholder="0x… payer" required maxlength="42"></label><label>Merchant wallet<input name="payee" placeholder="0x… recipient" required maxlength="42"></label></div>
           <label>USDC contract address<input name="asset" id="asset" readonly value="0x036cbd53842c5426634e7929541ec2318f3dcf7e"></label>
           <label>Optional PAYMENT-RESPONSE header<input name="paymentResponseHeader" placeholder="Base64 x402 settlement response (no signature/private key)" maxlength="8192"><small>Never paste PAYMENT-SIGNATURE, private keys, or webhook tokens.</small></label>

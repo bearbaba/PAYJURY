@@ -53,3 +53,89 @@
 .autofill-row button{border:1px solid #8fb375;background:#1a2d2c;color:#dcf6d6;border-radius:8px;padding:11px 14px;font-size:12px;font-weight:800}
 .autofill-row button:disabled{opacity:.55;cursor:progress}
 .autofill-row span{font-size:11px;color:#a9bdcb;line-height:1.6;flex:1 1 250px}
+
+/* UX acceptance 2026-11-11: case-first, compact hero, no horizontal clipping.
+   Keep actions in place instead of stretching the page with status panels. */
+html{scroll-padding-top:22px}
+body{overflow-x:clip}
+.hero{min-height:410px;padding:52px 0 54px;gap:clamp(25px,5vw,74px);grid-template-columns:minmax(0,1.2fr) minmax(290px,.8fr)}
+.hero h1{font-size:clamp(43px,5.3vw,70px);margin:16px 0 19px;max-width:740px}
+.hero p{font-size:15px;line-height:1.65}
+.hero-actions{margin-top:22px}
+.hero-aside{padding:20px 23px;transform:none}
+.sequence{padding-top:15px}
+.sequence-stage{padding:11px 12px}
+.connector{height:14px}
+.aside-foot{margin-top:15px;gap:16px}
+.ticker-inner{padding:12px 0;gap:13px}
+.workspace{padding:45px 0 60px}
+.section-head{margin-bottom:16px;gap:22px}
+.section-head h2{font-size:clamp(28px,3vw,39px)}
+.section-head p{max-width:430px;line-height:1.6;font-size:13px;margin-bottom:4px}
+.deployment-notice{display:flex;align-items:center;gap:11px;flex-wrap:wrap;padding:11px 14px;margin:0 0 22px;background:#111b27;border:1px solid #314154;border-radius:10px;color:#bdd1e1;font-size:12px;line-height:1.6}
+.deployment-dot{height:8px;width:8px;flex:none;border-radius:50%;background:#d8a765}
+.deployment-notice a{margin-left:auto;color:var(--lime);font-weight:700}
+.progress{gap:0;margin-bottom:16px;max-width:100%;min-width:0}
+.step{white-space:nowrap;min-width:0;gap:8px;font-size:12px}
+.step span{flex:none}
+.step.done{color:#a9cdb3}
+.step.done span{background:#223d2b;border-color:#447a51;color:var(--lime)}
+.rule{min-width:10px;margin:0 12px}
+.work-grid{grid-template-columns:minmax(0,1.42fr) minmax(0,.92fr);gap:22px}
+.work-grid>*{min-width:0}
+.right-stack{position:sticky;top:20px;min-width:0}
+.panel{padding:23px}
+.panel h3{font-size:22px}
+.muted{margin:7px 0 17px}
+.payment-start{grid-template-columns:minmax(180px,.8fr) minmax(0,1.2fr)}
+.payment-details-heading{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px 14px;margin:6px 0 13px}
+.payment-details-heading strong{font-size:13px;color:#e7f1f3}
+.payment-details-heading small{font-size:11px;color:#93aab9}
+.advanced-payment{margin:0 0 12px;border-top:1px solid #293b49;border-bottom:1px solid #293b49;padding:11px 0}
+.advanced-payment summary{color:#b7c8d7;font-size:12px;font-weight:650;cursor:pointer}
+.advanced-payment-fields{padding-top:17px}
+.advanced-payment-fields label:last-child{margin-bottom:5px}
+.autofill-row{margin:0 0 15px}
+.code-box{min-width:0}
+.code-box span{flex:0 0 auto}
+.code-box code{min-width:0;overflow-wrap:anywhere}
+.tracker{padding:0 0 58px}
+.tracker-head{margin-bottom:16px}
+.tracker-panel{padding:23px}
+.tracker-form label:first-child{flex:0 1 235px;min-width:190px}
+.tracker-form label:nth-child(2){flex:1 1 310px;min-width:180px}
+.tracker-form button{flex:0 0 auto}
+@media(max-width:1020px){
+  .hero{grid-template-columns:1fr;gap:25px;padding:48px 0}
+  .hero-aside{max-width:660px}
+  .right-stack{position:static}
+  .tracker-form label:first-child{flex:1 1 230px}
+}
+@media(max-width:780px){
+  .work-grid{grid-template-columns:minmax(0,1fr)}
+  .section-head{align-items:flex-start;flex-direction:column;gap:6px}
+  .section-head p{margin-top:0}
+  .right-stack{display:grid;grid-template-columns:minmax(0,1fr)}
+  .progress{overflow-x:auto;scrollbar-width:thin}
+  .step{font-size:11px}
+  .rule{margin:0 8px}
+}
+@media(max-width:560px){
+  .hero{padding:33px 0 36px;min-height:0}
+  .hero h1{font-size:clamp(41px,10vw,54px)}
+  .hero p{font-size:13px}
+  .hero-aside{padding:19px}
+  .ticker-inner{justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap;padding:10px 0}
+  .ticker-inner span{white-space:nowrap}
+  .workspace{padding:32px 0 45px}
+  .deployment-notice a{margin-left:0;width:100%}
+  .progress{margin-bottom:15px}
+  .rule{min-width:8px}
+  .step span{width:25px;height:25px}
+  .panel{padding:17px}
+  .payment-start,.fields.two{grid-template-columns:minmax(0,1fr)}
+  .tracker{padding-bottom:32px}
+  .tracker-panel{padding:16px}
+  .tracker-form label:first-child,.tracker-form label:nth-child(2){flex:1 1 100%;min-width:0}
+  .tracker-form button{flex:1 1 100%;width:100%}
+}

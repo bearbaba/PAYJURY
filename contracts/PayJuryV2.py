@@ -61,6 +61,10 @@ class PayJuryV2(gl.Contract):
     def __init__(self):
         pass
 
+    @gl.public.view
+    def version(self) -> str:
+        return "PAYJURY_V2_PAYMENT_SCOPED_AUTH_V1"
+
     def _payment_ref(self, network: str, tx_hash: str) -> str:
         if network not in ("eip155:84532", "eip155:8453"):
             raise gl.vm.UserError("Unsupported payment network")

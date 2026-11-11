@@ -1,6 +1,7 @@
 """Offline PAYJURY V2 contract security tests. No GenLayer RPC, signing or deploy."""
 import importlib.util
 import json
+import subprocess
 import sys
 import types
 import unittest
@@ -83,6 +84,27 @@ class AuthorizationTests(unittest.TestCase):
     def setUp(self):
         self.ic=make()
         FakeGL.message.sender_address=STRANGER
+
+    def test_canonical_ids_match_the_actual_javascript_case_id_algorithm(self):
+        # Cross-language proof: direct GenLayer V2 canonicalization must produce
+        # the same case ID as src/payment.mjs, including escaped Unicode.
+        for terms in ("Provide requested items", "Yêu cầu: 3 món, \"khớp\"\\nđầy đủ"):
+            packet=args(terms=terms)
+            raw={"network":packet["network"],"asset":packet["asset"],
+                 "txHash":packet["tx_hash"],"amountAtomic":packet["amount_atomic"],
+                 "payer":packet["payer"],"payee":packet["payee"],
+                 "endpoint":packet["endpoint"],"terms":packet["terms"],
+                 "delivery":packet["delivery"],"evidence":packet["evidence"]}
+            script=(
+                "import {validateClaim,caseIdForClaim} from './src/payment.mjs';"
+                "const c=validateClaim(JSON.parse(process.argv[1]));"
+                "process.stdout.write(caseIdForClaim(c));"
+            )
+            result=subprocess.run(
+                ["node","--input-type=module","-e",script,json.dumps(raw,ensure_ascii=False)],
+                cwd=str(file.parents[1]),capture_output=True,text=True,check=True
+            )
+            self.assertEqual(packet["case_id"],result.stdout.strip())
 
     def test_non_payer_cannot_file_without_delegation(self):
         with self.assertRaisesRegex(MockVM.UserError, "Payer or authorized delegate"):

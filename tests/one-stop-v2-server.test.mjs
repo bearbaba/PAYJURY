@@ -56,6 +56,8 @@ test('V2 tracker reads only the configured second contract, not historical V1',a
     assert.deepEqual(seen,{id:caseId,address:addr});
     const body=await res.json();
     assert.equal(body.caseStatus,'FILED');
+    assert.equal(body.contractVersion,'v2');
+    assert.equal(body.contractAddress,addr);
     assert.equal(body.settlement.status,'NOT_VERIFIED');
   }finally{
     if(prev===undefined)delete process.env.GENLAYER_V2_CONTRACT_ADDRESS;

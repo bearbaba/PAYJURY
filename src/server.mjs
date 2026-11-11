@@ -20,6 +20,13 @@ function respond(res,status,data) {
   res.end(JSON.stringify(data));
 }
 async function jsonBody(req) {
+  // Vercel's Node adapter may pre-parse POST bodies. Keep the same strict
+  // validation as the raw local Node stream, without consuming it twice.
+  if(req.body!==undefined){
+    const serialized=typeof req.body==='string'?req.body:JSON.stringify(req.body);
+    if(Buffer.byteLength(serialized)>MAX_BODY)throw Error('Request exceeds size limit');
+    try{return JSON.parse(serialized);}catch{throw Error('Invalid JSON request');}
+  }
   let size=0,chunks=[];
   for await(const chunk of req) {
     size+=chunk.length;
@@ -120,7 +127,7 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
           genlayerContractAddress:/^0x[0-9a-f]{40}$/i.test(contract||'')?contract:null,
           genlayerV2ContractAddress:v2Configured(v2)?v2:null,
           v2FilingEnabled:v2Configured(v2),
-          acceptsPayments:false,signsGenLayerWrites:false});return;
+          acceptsPayments:false,hostedReadOnly:Boolean(process.env.VERCEL),signsGenLayerWrites:false});return;
       }
       // ONE already-paid case restored from owner-supplied immutable evidence.
       // NO x402 PAYMENT-SIGNATURE, no wallet, no GenLayer writes or local lock reset.

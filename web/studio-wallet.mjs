@@ -88,21 +88,42 @@ export async function readV2Contract(address,fn,args){
     throw Error('GenLayer V2 read identity mismatch; wallet action blocked');
   return body.result;
 }
-export async function sendV2Write(address,fn,args){
+async function confirmV2WalletBeforeWrite(address,fn,args){
   if(!writeClient||!writeAddress)throw Error('Connect GenLayer wallet before signing');
   if(!ADDRESS.test(address))throw Error('Invalid GenLayer V2 contract');
+  if(!['file_case','adjudicate_case','set_delegate'].includes(fn)||!Array.isArray(args))
+    throw Error('Unsupported GenLayer V2 write method');
   const provider=globalThis.window?.ethereum;
+  if(!provider?.request)throw Error('GenLayer wallet provider disconnected');
   const active=await provider.request({method:'eth_accounts'});
   if(!Array.isArray(active)||String(active[0]||'').toLowerCase()!==writeAddress)
     throw Error('Wallet changed. Reconnect before signing');
   const network=String(await provider.request({method:'eth_chainId'})).toLowerCase();
   if(network!==STUDIO_CHAIN_ID)
     throw Error('Wallet is not on GenLayer Studionet 61999. Reconnect GenLayer wallet; never sign on Base Sepolia.');
-  const write={address,functionName:fn,args};
-  // No arbitrary fees or unstated transfers. Estimate actual network fees.
-  const estimate=await writeClient.estimateTransactionFeesForWrite(write);
-  const hash=await writeClient.writeContract({...write,
-    fees:{distribution:estimate.distribution,feeValue:estimate.feeValue}});
+}
+// Fee estimate is not a signed transaction. It MUST complete before the
+// persistent one-shot WRITE lock is created, otherwise an RPC estimation
+// failure can falsely lock an operation which was never sent to the wallet.
+export async function estimateV2WriteFees(address,fn,args){
+  await confirmV2WalletBeforeWrite(address,fn,args);
+  const quote=await writeClient.estimateTransactionFeesForWrite({
+    address,functionName:fn,args
+  });
+  if(!quote?.distribution||quote.feeValue===undefined||quote.feeValue===null)
+    throw Error('GenLayer fee estimation did not return a usable quote. No transaction was signed.');
+  return {distribution:quote.distribution,feeValue:quote.feeValue};
+}
+export async function sendV2Write(address,fn,args,estimatedFees){
+  await confirmV2WalletBeforeWrite(address,fn,args);
+  if(!estimatedFees?.distribution||estimatedFees.feeValue===undefined||
+     estimatedFees.feeValue===null)
+    throw Error('GenLayer fee preflight was not completed; signing refused');
+  // The frontend creates the one-shot persistent lock immediately before
+  // this action. Only the user's connected wallet can authorize broadcast.
+  const hash=await writeClient.writeContract({
+    address,functionName:fn,args,fees:estimatedFees
+  });
   if(typeof hash!=='string'||!TX.test(hash))
     throw Error('GenLayer returned an invalid transaction ID; outcome is uncertain');
   return hash;

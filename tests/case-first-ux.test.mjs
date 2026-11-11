@@ -12,15 +12,20 @@ async function serve(callback){
     await new Promise((resolve,reject)=>server.close(err=>err?reject(err):resolve()));
   }
 }
-test('case creation precedes historical tracker and primary CTAs lead to correct section',async()=>{
+test('completed V2 proof precedes the optional new-case workflow and uses live reads',async()=>{
   await serve(async base=>{
     const html=await (await fetch(base+'/')).text();
-    assert.ok(html.indexOf('id="workflow"')>0);
-    assert.ok(html.indexOf('id="case-tracker"')>html.indexOf('id="workflow"'));
-    assert.match(html,/href="#workflow">Start a case/);
-    assert.match(html,/href="#case-tracker">Track an existing case/);
-    assert.match(html,/href="#workflow">Create case/);
-    assert.match(html,/href="#case-tracker">Track case/);
+    const js=await (await fetch(base+'/app.js')).text();
+    assert.ok(html.indexOf('id="case-tracker"')>0);
+    assert.ok(html.indexOf('id="case-tracker"')<html.indexOf('id="workflow"'));
+    assert.match(html,/href="#case-tracker">View verified V2 verdict/);
+    assert.match(html,/href="#workflow">Create a new case/);
+    assert.match(html,/href="#case-tracker">Live verdict/);
+    assert.match(html,/href="#workflow">New case/);
+    assert.match(html,/id="track-version"/);
+    assert.match(html,/value="pj_9f2276fd1904120b16d5f5b6ea5f7a2b"/);
+    assert.match(js,/queueMicrotask\(\(\)=>/);
+    assert.match(js,/\$\('track-form'\)\.requestSubmit\(\)/);
     assert.match(html,/id="deployment-message"/);
   });
 });

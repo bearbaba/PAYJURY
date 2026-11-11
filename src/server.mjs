@@ -8,6 +8,8 @@ import {trackFiledCase} from './case-tracker.mjs';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
 const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const MAX_BODY=18000;
+const V1_ADDRESS='0xd57a04c3cc304ab30c9435a9ae34a840802f11c8';
+const v2Configured=address=>/^0x[0-9a-f]{40}$/i.test(address||'')&&address.toLowerCase()!==V1_ADDRESS;
 function respond(res,status,data) {
   res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store',
     'x-content-type-options':'nosniff','referrer-policy':'no-referrer'});
@@ -57,8 +59,8 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
         respond(res,200,{name:'PAYJURY',mode:'evidence-first',
           paymentVerifierConfigured:Boolean(rpcUrl),genlayerReadConfigured:/^0x[0-9a-f]{40}$/i.test(contract||''),
           genlayerContractAddress:/^0x[0-9a-f]{40}$/i.test(contract||'')?contract:null,
-          genlayerV2ContractAddress:/^0x[0-9a-f]{40}$/i.test(v2||'')?v2:null,
-          v2FilingEnabled:/^0x[0-9a-f]{40}$/i.test(v2||''),
+          genlayerV2ContractAddress:v2Configured(v2)?v2:null,
+          v2FilingEnabled:v2Configured(v2),
           acceptsPayments:false,signsGenLayerWrites:false});return;
       }
       if(req.method==='POST'&&url.pathname==='/api/verify'){
@@ -81,7 +83,7 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
         }
         const address=version==='v2'?process.env.GENLAYER_V2_CONTRACT_ADDRESS:
           process.env.GENLAYER_CONTRACT_ADDRESS;
-        if(version==='v2'&&!/^0x[0-9a-f]{40}$/i.test(address||'')){
+        if(version==='v2'&&!v2Configured(address)){
           respond(res,503,{error:'V2 contract not configured. Read-only v1 available.'});return;
         }
         try{

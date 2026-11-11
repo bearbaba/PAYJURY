@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {NETWORKS,validateClaim,caseIdForClaim,verifyBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from '../src/payment.mjs';
+import {NETWORKS,validateClaim,caseIdForClaim,verifyBaseUSDCTransfer,inspectBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from '../src/payment.mjs';
 import {inspectX402Quote,fetchX402Quote} from '../src/x402.mjs';
 
 const payer='0x'+'1'.repeat(40),payee='0x'+'2'.repeat(40),txHash='0x'+'a'.repeat(64);
@@ -119,4 +119,43 @@ test('quote fetch requires exact allowed HTTPS hostname and HTTP 402',async()=>{
   assert.equal(calls,1);assert.equal(result.choiceCount,1);
   await assert.rejects(fetchX402Quote(claim.endpoint,{allowedHost:'api.example.com',
     fetchImpl:async()=>({status:200,headers:{get:()=>null}})}),/Expected HTTP 402/);
+});
+
+test('one-click receipt inspection auto-fills EXACT official Base USDC transfer, not an x402 verdict',async()=>{
+  const payment=await inspectBaseUSDCTransfer({network:claim.network,txHash:claim.txHash},{
+    rpcUrl:'https://rpc.example.com',fetchImpl:fakeRpc()
+  });
+  assert.equal(payment.result,'BASE_USDC_TRANSFER_DISCOVERED_AND_VERIFIED');
+  assert.equal(payment.amountAtomic,'10000');
+  assert.equal(payment.payer,payer);
+  assert.equal(payment.payee,payee);
+  assert.equal(payment.asset,claim.asset);
+  assert.equal(payment.confirmations,4);
+  assert.match(payment.warning,/not x402 causation/);
+});
+test('ambiguous or nonexistent official USDC transfer cannot auto-fill a different payer',async()=>{
+  const good={address:claim.asset,topics:[transferTopic,addressTopic(payer),addressTopic(payee)],
+    data:'0x'+BigInt('10000').toString(16).padStart(64,'0'),logIndex:'0x0'};
+  await assert.rejects(inspectBaseUSDCTransfer({network:claim.network,txHash:claim.txHash},{
+    rpcUrl:'https://rpc.example.com',fetchImpl:fakeRpc({logs:[]})
+  }),/Ambiguous or absent/);
+  await assert.rejects(inspectBaseUSDCTransfer({network:claim.network,txHash:claim.txHash},{
+    rpcUrl:'https://rpc.example.com',fetchImpl:fakeRpc({logs:[good,good]})
+  }),/Ambiguous or absent/);
+  await assert.rejects(inspectBaseUSDCTransfer({network:claim.network,txHash:claim.txHash},{
+    rpcUrl:'https://rpc.example.com',fetchImpl:fakeRpc({chain:'0x1'})
+  }),/network mismatch/);
+});
+test('inspection rejects reverted and over-cap token receipts without populating a case',async()=>{
+  await assert.rejects(inspectBaseUSDCTransfer({network:claim.network,txHash:claim.txHash},{
+    rpcUrl:'https://rpc.example.com',fetchImpl:fakeRpc({status:'0x0'})
+  }),/reverted/);
+  const overpriced={address:claim.asset,topics:[transferTopic,addressTopic(payer),addressTopic(payee)],
+    data:'0x'+BigInt('100001').toString(16).padStart(64,'0'),logIndex:'0x0'};
+  await assert.rejects(inspectBaseUSDCTransfer({network:claim.network,txHash:claim.txHash},{
+    rpcUrl:'https://rpc.example.com',fetchImpl:fakeRpc({logs:[overpriced]})
+  }),/safety cap/);
+  await assert.rejects(inspectBaseUSDCTransfer({network:'eip155:1',txHash:claim.txHash},{
+    rpcUrl:'https://rpc.example.com',fetchImpl:fakeRpc()
+  }),/Unsupported/);
 });

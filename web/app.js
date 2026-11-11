@@ -12,7 +12,7 @@ function display(label,title,message,tone) {
   heading.textContent=title;detail.textContent=message;
 }
 form.addEventListener('submit',async event=>{
-  event.preventDefault();packet=null;
+  event.preventDefault();packet=null;updateV2PreparedPacket(null);
   $('copy-case').disabled=true;$('read-verdict').disabled=true;
   const button=$('verify-btn');button.disabled=true;
   display('VERIFYING','Checking the Base chain','Reading a real transaction receipt. Nothing is paid or signed.','pending');
@@ -158,6 +158,7 @@ function v2Controls(){
 function updateV2PreparedPacket(next){
   verifiedPacket=next;
   trackedCaseV2=null;
+  $('v2-overview').hidden=true;
   if(next?.settlement?.result==='BASE_USDC_TRANSFER_VERIFIED'){
     $('v2-overview').hidden=false;
     $('v2-case').textContent=next.caseId;
@@ -428,3 +429,44 @@ $('v2-resume').addEventListener('click',async()=>{
 });
 
 $('v2-delegate').addEventListener('input',v2Controls);
+
+/* Zero-signature USDC discovery — reduces manual payment fields to the TX hash. */
+$('autofill-transfer').addEventListener('click',async()=>{
+  const button=$('autofill-transfer'), message=$('autofill-status');
+  const networkValue=network.value;
+  const tx=String(form.elements.namedItem('txHash')?.value||'').trim().toLowerCase();
+  if(!/^0x[0-9a-f]{64}$/.test(tx)){
+    message.textContent='Enter a complete 0x-prefixed 66-character Base transaction hash.';
+    return;
+  }
+  button.disabled=true;
+  message.textContent='Reading on-chain USDC Transfer. No payment or wallet signing.';
+  packet=null;
+  updateV2PreparedPacket(null);
+  $('read-verdict').disabled=true;
+  $('copy-case').disabled=true;
+  $('case-id').textContent='—';
+  $('verdict').textContent='UNVERIFIED';
+  try{
+    const r=await fetch('/api/inspect?network='+encodeURIComponent(networkValue)+
+      '&txHash='+encodeURIComponent(tx));
+    const data=await r.json();
+    if(!r.ok)throw Error(data.error||'Base USDC Transfer inspection unavailable');
+    if(data.result!=='BASE_USDC_TRANSFER_DISCOVERED_AND_VERIFIED'||
+      data.network!==networkValue||data.txHash!==tx)
+      throw Error('Payment receipt inspection did not match selected network or transaction');
+    for(const [name,value] of [
+      ['payer',data.payer],['payee',data.payee],
+      ['amountAtomic',data.amountAtomic],['asset',data.asset]
+    ])form.elements.namedItem(name).value=value;
+    message.textContent='USDC Transfer verified with '+data.confirmations+
+      ' confirmations. Payer, payee, amount and token filled automatically. Enter the paid API endpoint and delivery evidence next.';
+    display('TRANSFER VERIFIED','Payment details detected — not filed',
+      'The Base USDC Transfer was checked independently. A transfer alone is not proof of correct x402 API delivery. Complete case evidence before review.','success');
+  }catch(error){
+    message.textContent=String(error?.message||'Transfer lookup unavailable').slice(0,220)+
+      '. No values were assumed, and no transaction was sent.';
+    display('NOT VERIFIED','Cannot auto-fill this transaction',
+      'Review the network and TX hash. Ambiguous token transfers are not auto-selected.','error');
+  }finally{button.disabled=false;}
+});

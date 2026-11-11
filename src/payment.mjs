@@ -138,3 +138,58 @@ export function makeCasePacket(claim, settlement, x402Response=null) {
     warning:'Off-chain delivery/evidence remain disputed claims until GenLayer adjudication. No escrow or automatic refund.',
   };
 }
+
+
+/**
+ * Discover the single exact official USDC Transfer in a Base transaction,
+ * and re-verify that claim independently. READ ONLY: no settlement, no signing.
+ * Ambiguous token transfers fail closed rather than auto-filling the wrong payer.
+ */
+export async function inspectBaseUSDCTransfer({network,txHash},
+  {rpcUrl,fetchImpl=fetch,requiredConfirmations=2}={}){
+  if(!NETWORKS[network])throw Error('Unsupported payment chain');
+  if(typeof txHash!=='string'||!HASH.test(txHash))throw Error('Invalid txHash');
+  const normalizedHash=txHash.toLowerCase();
+  const asset=NETWORKS[network].usdc;
+  const endpoint=requireHttpsEndpoint(rpcUrl);
+  let count=0;
+  async function rpc(method,params=[]){
+    const response=await fetchImpl(endpoint,{
+      method:'POST',redirect:'error',signal:AbortSignal.timeout(8000),
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({jsonrpc:'2.0',id:++count,method,params})
+    });
+    if(!response.ok)throw Error('RPC HTTP unavailable');
+    const body=await response.json();
+    if(body?.error||body?.result===undefined)throw Error('RPC response unavailable');
+    return body.result;
+  }
+  const chainId=parseHexQuantity(await rpc('eth_chainId'),'chainId');
+  if(chainId!==BigInt(NETWORKS[network].chainId))throw Error('RPC network mismatch');
+  const receipt=await rpc('eth_getTransactionReceipt',[normalizedHash]);
+  if(!receipt||String(receipt.transactionHash||'').toLowerCase()!==normalizedHash)
+    throw Error('Transaction receipt unavailable or mismatched');
+  if(parseHexQuantity(receipt.status,'status')!==1n)throw Error('Transaction reverted');
+  const candidates=(Array.isArray(receipt.logs)?receipt.logs:[]).filter(log=>
+    typeof log?.address==='string'&&log.address.toLowerCase()===asset &&
+    Array.isArray(log.topics)&&log.topics.length===3 &&
+    String(log.topics[0]).toLowerCase()===TRANSFER_TOPIC &&
+    topicAddress(log.topics[1])&&topicAddress(log.topics[2]) &&
+    typeof log.data==='string'&&/^0x[0-9a-f]{64}$/i.test(log.data)
+  );
+  if(candidates.length!==1)throw Error('Ambiguous or absent official USDC Transfer; cannot auto-fill');
+  const log=candidates[0];
+  const amountAtomic=BigInt(log.data).toString();
+  if(BigInt(amountAtomic)===0n||BigInt(amountAtomic)>MAX_ATOMIC)
+    throw Error('Payment amount exceeds fixed 0.10 USDC safety cap');
+  const claim={network,txHash:normalizedHash,asset,
+    payer:topicAddress(log.topics[1]),
+    payee:topicAddress(log.topics[2]),amountAtomic};
+  const proof=await verifyBaseUSDCTransfer(claim,{rpcUrl,fetchImpl,requiredConfirmations});
+  return Object.freeze({
+    result:'BASE_USDC_TRANSFER_DISCOVERED_AND_VERIFIED',
+    ...claim,blockNumber:proof.blockNumber,confirmations:proof.confirmations,
+    transferLogIndex:proof.transferLogIndex,
+    warning:'This proves an official USDC Transfer only, not x402 causation, API delivery, claimant rights or refunds.'
+  });
+}

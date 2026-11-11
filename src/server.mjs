@@ -2,7 +2,7 @@ import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {validateClaim,verifyBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from './payment.mjs';
+import {validateClaim,verifyBaseUSDCTransfer,inspectBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from './payment.mjs';
 import {trackFiledCase} from './case-tracker.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
@@ -63,6 +63,13 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
           v2FilingEnabled:v2Configured(v2),
           acceptsPayments:false,signsGenLayerWrites:false});return;
       }
+      if(req.method==='GET'&&url.pathname==='/api/inspect'){
+        if(!rpcUrl){respond(res,503,{error:'BASE_RPC_URL not configured; inspection unavailable'});return;}
+        const network=url.searchParams.get('network')||'';
+        const txHash=url.searchParams.get('txHash')||'';
+        const found=await inspectBaseUSDCTransfer({network,txHash},{rpcUrl});
+        respond(res,200,found);return;
+      }
       if(req.method==='POST'&&url.pathname==='/api/verify'){
         const body=await jsonBody(req);
         const claim=validateClaim(body);
@@ -111,7 +118,7 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
       respond(res,404,{error:'Not found'});
     } catch(error){
       const safe=String(error?.message||'Validation error').slice(0,170);
-      const known=/^(Invalid|Only|Payment|Transaction|Matching|Unsupported|HTTPS|x402|RPC |Malformed|Request |Expected|Unparseable)/.test(safe);
+      const known=/^(Invalid|Only|Payment|Transaction|Matching|Ambiguous|Unsupported|HTTPS|x402|RPC |Malformed|Request |Expected|Unparseable)/.test(safe);
       respond(res,known?422:503,{error:known?safe:'Verification unavailable; do not assume payment or verdict success.'});
     }
   });

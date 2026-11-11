@@ -168,6 +168,7 @@ $('track-form').addEventListener('submit',async event=>{
   const id=$('track-id').value.trim();
   const message=$('track-message'),button=$('track-button');
   lastVerifiedTrack=null;
+  $('track-copy-id').disabled=true;
   $('track-export').disabled=true;
   $('track-results').hidden=true;
   $('track-base-link').hidden=true;
@@ -187,6 +188,7 @@ $('track-form').addEventListener('submit',async event=>{
     if(data.caseId!==id||!['FILED','DECIDED'].includes(data.caseStatus))throw Error('Unexpected case readback');
     if(data.contractVersion!==version)throw Error('Contract version mismatch');
     lastVerifiedTrack=data;
+    $('track-copy-id').disabled=false;
     const paymentVerified=data.settlement?.status==='BASE_USDC_TRANSFER_VERIFIED';
     const idMatched=data.identityBinding==='DETERMINISTIC_ID_MATCHED';
     const decided=data.caseStatus==='DECIDED';

@@ -143,7 +143,7 @@ function v2Controls(){
   const currentCase=trackedCaseV2?.caseId||verifiedPacket?.caseId;
   const delegate=$('v2-delegate').value.trim().toLowerCase();
   const delegationKey=verifiedPacket&&WALLET_ADDR.test(delegate)?
-    verifiedPacket.payer.toLowerCase()+':delegate:'+delegate:null;
+    verifiedPacket.payer.toLowerCase()+':'+verifiedPacket.network+':'+verifiedPacket.txHash+':delegate:'+delegate:null;
   $('v2-resume').disabled=!signed||!(
     (currentCase&&signedLock(currentCase,'file_case')?.hash)||
     (currentCase&&signedLock(currentCase,'adjudicate_case')?.hash)||
@@ -204,12 +204,12 @@ async function refreshRecordedTransaction(caseId,method,hash){
   }
   if(method==='set_delegate'){
     const details=signedLock(caseId,method);
-    const {payer,delegate,enabled}=details?.delegation||{};
+    const {payer,network,txHash,delegate,enabled}=details?.delegation||{};
     if(!WALLET_ADDR.test(payer||'')||!WALLET_ADDR.test(delegate||'')){
       v2Message('Delegation transaction FINALIZED / SUCCESS, but permission metadata missing. Preserve hash.');
       return false;
     }
-    const authorized=await sdk.readV2Contract(v2Address,'can_file_for',[payer,delegate]);
+    const authorized=await sdk.readV2Contract(v2Address,'can_file_for',[payer,network,txHash,delegate]);
     if(authorized!==enabled){
       v2Message('Delegation TX finalized; permission readback not yet consistent. Preserve hash.');
       return false;
@@ -349,7 +349,8 @@ async function authorizeDelegate(enabled){
   if(!WALLET_ADDR.test(delegate)||delegate===v2Wallet){
     v2Message('Enter a different valid 0x delegate wallet address.');return;
   }
-  const key=payer+':delegate:'+delegate;
+  const network=verifiedPacket.network,txHash=verifiedPacket.txHash;
+  const key=payer+':'+network+':'+txHash+':delegate:'+delegate;
   try{
     const sdk=await getV2Sdk();
     const permission=await sdk.readV2Contract(v2Address,'can_file_for',[payer,delegate]);
@@ -370,7 +371,7 @@ async function authorizeDelegate(enabled){
     }
     if(!globalThis.confirm((enabled?'Authorize ':'Revoke ')+delegate+
       ' for V2 filing? This sends a real GenLayer transaction.'))return;
-    await v2Write('set_delegate',key,[delegate,enabled],{payer,delegate,enabled});
+    await v2Write('set_delegate',key,[network,txHash,delegate,enabled],{payer,network,txHash,delegate,enabled});
   }catch(error){v2Message(String(error?.message||'Delegation preflight failed').slice(0,220));}
 }
 $('v2-authorize').addEventListener('click',()=>authorizeDelegate(true));
@@ -403,7 +404,7 @@ $('v2-resume').addEventListener('click',async()=>{
   }
   const delegate=$('v2-delegate').value.trim().toLowerCase();
   if(WALLET_ADDR.test(delegate)&&verifiedPacket){
-    const dkey=verifiedPacket.payer.toLowerCase()+':delegate:'+delegate;
+    const dkey=verifiedPacket.payer.toLowerCase()+':'+verifiedPacket.network+':'+verifiedPacket.txHash+':delegate:'+delegate;
     const history=signedLock(dkey,'set_delegate');
     if(history?.hash){await refreshRecordedTransaction(dkey,'set_delegate',history.hash);return;}
   }

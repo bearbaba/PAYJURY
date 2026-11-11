@@ -12,16 +12,32 @@ async function serve(callback){
     await new Promise((resolve,reject)=>server.close(err=>err?reject(err):resolve()));
   }
 }
-test('case creation precedes historical tracker and primary CTAs lead to correct section',async()=>{
+test('user overview, manager workspace and presentation all show authentic live case',async()=>{
   await serve(async base=>{
     const html=await (await fetch(base+'/')).text();
-    assert.ok(html.indexOf('id="workflow"')>0);
-    assert.ok(html.indexOf('id="case-tracker"')>html.indexOf('id="workflow"'));
-    assert.match(html,/href="#workflow">Start a case/);
-    assert.match(html,/href="#case-tracker">Track an existing case/);
-    assert.match(html,/href="#workflow">Create case/);
-    assert.match(html,/href="#case-tracker">Track case/);
+    const js=await (await fetch(base+'/app.js')).text();
+    const css=await (await fetch(base+'/styles.css')).text();
+    assert.ok(html.indexOf('id="case-tracker"')>0);
+    assert.ok(html.indexOf('id="case-tracker"')<html.indexOf('id="workflow"'));
+    assert.match(html,/href="#case-tracker">View verified V2 verdict/);
+    assert.match(html,/data-open-view="overview"/);
+    assert.match(html,/data-open-view="workspace"/);
+    assert.match(html,/data-open-view="demo"/);
+    assert.match(html,/body data-view="overview"/);
+    assert.match(html,/id="proof-timeline"/);
+    assert.match(html,/id="track-outcome"/);
+    assert.match(html,/id="track-export"/);
+    assert.match(html,/id="track-version"/);
+    assert.match(html,/value="pj_9f2276fd1904120b16d5f5b6ea5f7a2b"/);
     assert.match(html,/id="deployment-message"/);
+    assert.match(js,/queueMicrotask\(\(\)=>/);
+    assert.match(js,/\$\('track-form'\)\.requestSubmit\(\)/);
+    assert.match(js,/function openPayjuryView/);
+    assert.match(js,/function proofState/);
+    assert.match(js,/lastVerifiedTrack=null/);
+    assert.match(css,/body\[data-view=overview\] #workflow/);
+    assert.match(css,/body\[data-view=demo\] \.tracker-head/);
+    assert.match(css,/\.proof-timeline\{display:grid/);
   });
 });
 test('workflow has four accessible phases and no misleading permanent read-only claim',async()=>{
@@ -29,7 +45,7 @@ test('workflow has four accessible phases and no misleading permanent read-only 
     const html=await (await fetch(base+'/')).text();
     assert.deepEqual([...html.matchAll(/data-workflow-step="(\d)"/g)].map(m=>Number(m[1])),
       [1,2,3,4]);
-    assert.match(html,/One place\./);
+    assert.match(html,/Manage a case\. Not a dozen tabs\./);
     assert.doesNotMatch(html,/Nothing is signed or paid by this page\./);
     assert.match(html,/filing and wallet approvals remain locked|Wallet signing remains unavailable/);
     assert.match(html,/id="v2-connect" disabled/);

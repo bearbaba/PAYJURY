@@ -9,52 +9,101 @@
   <link rel="stylesheet" href="/styles.css">
   <script type="module" src="/app.js"></script>
 </head>
-<body>
+<body data-view="overview">
   <div class="glow glow-a"></div><div class="glow glow-b"></div>
   <header class="site-header">
     <a class="brand" href="/" aria-label="PAYJURY home"><span class="brand-symbol">P<span>J</span></span><span>PAY<span class="brand-muted">JURY</span></span></a>
-    <nav aria-label="Primary">
-      <a href="#workflow">Create case</a><a href="#case-tracker">Track case</a>
-      <a href="https://github.com/bearbaba/PAYJURY" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+    <nav class="mode-nav" aria-label="Website views">
+      <button type="button" class="mode-button is-active" id="view-overview" aria-pressed="true" data-open-view="overview">Overview</button>
+      <button type="button" class="mode-button" id="view-workspace" aria-pressed="false" data-open-view="workspace">Workspace</button>
+      <button type="button" class="mode-button mode-presentation" id="view-demo" aria-pressed="false" data-open-view="demo">◉ Presentation</button>
     </nav>
-    <span class="environment"><span class="led"></span> EVIDENCE-FIRST BETA</span>
+    <span class="environment"><span class="led"></span> TESTNET · LIVE READS</span>
   </header>
   <main>
     <section class="hero container">
       <div class="hero-copy">
-        <div class="eyebrow"><span class="line"></span> THE INTERNET COURT FOR PAID AI SERVICES</div>
-        <h1>Payment is<br>provable.<br><em>Delivery should be too.</em></h1>
-        <p>AI agents pay for APIs in seconds. PAYJURY connects independent x402 payment evidence to GenLayer’s AI-powered delivery adjudication — with clear receipts, immutable terms and no invented verdicts.</p>
-        <div class="hero-actions"><a class="primary" href="#workflow">Start a case <span>↗</span></a><a class="secondary" href="#case-tracker">Track an existing case ↘</a></div>
+        <div class="eyebrow"><span class="line"></span> X402 PAYMENTS × GENLAYER INTELLIGENT CONTRACTS</div>
+        <h1>Proof of payment.<br><em>Judgment of delivery.</em></h1>
+        <p>AI services get paid instantly. PAYJURY makes the delivery claim auditable — from an independently verified USDC transfer to a recorded GenLayer decision.</p>
+        <div class="hero-actions"><a class="primary" href="#case-tracker">View verified V2 verdict <span>↗</span></a><button type="button" class="secondary nav-action" data-open-view="workspace">Open case workspace ↓</button></div>
       </div>
       <div class="hero-aside">
-        <div class="subhead"><span class="green-dot"></span> PROOF PIPELINE</div>
+        <div class="subhead"><span class="green-dot"></span> HOW PAYJURY WORKS</div>
         <div class="sequence"><div class="sequence-stage"><span class="sequence-num">01</span><div><b>PAY</b><small>HTTP 402 · Base USDC</small></div><span class="arrow">↗</span></div>
           <div class="connector"></div><div class="sequence-stage"><span class="sequence-num">02</span><div><b>DISPUTE</b><small>Immutable delivery evidence</small></div><span class="arrow">↗</span></div>
           <div class="connector"></div><div class="sequence-stage active"><span class="sequence-num">03</span><div><b>VERDICT</b><small>GenLayer Intelligent Contract</small></div><span class="arrow">↗</span></div></div>
-        <div class="aside-foot"><span>No escrow. No automatic refunds.</span><span>Transparent by design.</span></div>
+        <div class="aside-foot"><span>Real chain evidence</span><span>Transparent AI reasoning</span></div>
       </div>
     </section>
 
-    <section class="ticker"><div class="container ticker-inner"><span>BASE USDC</span><i></i><span>HTTP x402</span><i></i><span>GENLAYER STUDIONET</span><i></i><span>INDEPENDENT VERIFICATION</span><i></i><span>AI JURY</span></div></section>
+    <section class="ticker" aria-label="Technology stack"><div class="container ticker-inner"><span><b>01</b> BASE USDC</span><i></i><span><b>02</b> HTTP x402</span><i></i><span><b>03</b> GENLAYER V2</span><i></i><span>REAL TRANSACTIONS · INDEPENDENT READBACK</span></div></section>
 
+    <section class="tracker container" id="case-tracker">
+      <div class="tracker-head">
+        <div><div class="eyebrow">CASE OVERVIEW · GENLAYER STUDIONET</div><h2>Every verdict has a trail.</h2>
+          <p>One real x402 payment. One GenLayer V2 case. A live, independently checked decision — no wallet or repeat transaction needed.</p></div>
+        <span class="tag proof-scope">LIVE ON-CHAIN READ · BASE SEPOLIA</span>
+      </div>
+      <div class="panel tracker-panel">
+        <div class="proof-cover">
+          <div class="proof-cover-copy"><span class="proof-kicker">VERIFIABLE DECISION · PAYJURY V2</span>
+            <strong id="track-outcome" aria-live="polite">Reading on-chain decision…</strong>
+            <small id="track-outcome-subtitle">Checking GenLayer state and the original Base USDC receipt</small>
+          </div>
+          <span class="proof-signal" id="track-signal">LIVE QUERY</span>
+        </div>
+        <form id="track-form" class="tracker-form">
+          <label for="track-version">Contract version
+            <select id="track-version" name="version"><option value="v2" selected>V2 · Authorized filing</option><option value="v1">V1 · Verified history</option></select>
+          </label>
+          <label for="track-id">GenLayer Case ID
+            <input id="track-id" name="caseId" value="pj_9f2276fd1904120b16d5f5b6ea5f7a2b" placeholder="pj_…" required pattern="pj_[0-9a-f]{32}" maxlength="35" autocomplete="off" spellcheck="false">
+          </label>
+          <button type="submit" id="track-button">↻ Refresh proof</button>
+          <button type="button" id="track-example" class="tracker-example">Reset to V2 example</button>
+        </form>
+        <p class="tracker-message" id="track-message" role="status" aria-live="polite">Reading GenLayer and verifying the Base receipt…</p>
+        <div class="proof-timeline" id="proof-timeline" aria-label="Evidence checkpoints">
+          <div class="proof-step"><span class="proof-step-index">01</span><div><b>Payment</b><small id="proof-stage-payment">Checking Base USDC</small></div></div>
+          <div class="proof-step"><span class="proof-step-index">02</span><div><b>Case filed</b><small id="proof-stage-case">Reading GenLayer V2</small></div></div>
+          <div class="proof-step"><span class="proof-step-index">03</span><div><b>AI decision</b><small id="proof-stage-decision">Waiting for result</small></div></div>
+        </div>
+        <div id="track-results" class="tracker-results" hidden>
+          <div class="tracker-metrics">
+            <div><span>GenLayer status</span><strong id="track-status">—</strong></div>
+            <div><span>AI verdict</span><strong id="track-verdict">—</strong></div>
+            <div><span>Base payment proof</span><strong id="track-payment">—</strong></div>
+            <div><span>Case identity binding</span><strong id="track-binding">—</strong></div>
+          </div>
+          <div class="reason-section"><div class="reason-heading"><span>GENLAYER AI REASONING</span><span class="reason-meta">On-chain readback</span></div><p id="track-reason"></p></div>
+          <p class="tracker-caveat">The receipt proves only a USDC transfer; adjudication is separate. This readback does not independently audit GenLayer transaction finality or prove merchant delivery quality or claimant authorization.</p>
+          <div class="tracker-links">
+            <a id="track-base-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Base payment ↗</a>
+            <a id="track-genlayer-link" href="https://explorer-studio.genlayer.com/address/0x0a6171C6a580c58d999a251436CE7c63FFc3dc31" target="_blank" rel="noopener noreferrer">GenLayer contract ↗</a>
+            <button type="button" id="track-copy-id" disabled>Copy Case ID</button>
+            <button type="button" id="track-export" class="operator-only" disabled>Export proof JSON ↓</button>
+          </div>
+        </div>
+      </div>
+    </section>
     <section class="workspace container" id="workflow">
-      <div class="section-head"><div><div class="eyebrow">CASE WORKSPACE</div><h2>From payment to verdict. One place.</h2></div><p>Verify your Base transfer, attach real delivery evidence, then approve GenLayer actions in your own wallet when V2 is available. This page never pays for you.</p></div>
+      <div class="section-head"><div><div class="eyebrow">OPERATOR WORKSPACE · V2</div><h2>Manage a case. Not a dozen tabs.</h2></div><p>Verify payment, review evidence, and use wallet-authorized GenLayer actions when needed. Switching views does not grant wallet permissions.</p></div>
       <div class="deployment-notice" id="deployment-notice" role="status"><span class="deployment-dot"></span><span id="deployment-message">Checking GenLayer V2 filing availability. V1 case history remains read-only.</span><a href="#case-tracker">Have a case already? Track it ↗</a></div>
       <div class="progress" aria-label="Case workflow steps"><div class="step current" data-workflow-step="1" aria-current="step"><span>01</span> Payment</div><div class="rule"></div><div class="step" data-workflow-step="2"><span>02</span> Evidence</div><div class="rule"></div><div class="step" data-workflow-step="3"><span>03</span> Authorize</div><div class="rule"></div><div class="step" data-workflow-step="4"><span>04</span> Verdict</div></div>
       <div class="work-grid">
         <form class="case-form panel" id="case-form">
           <div class="panel-top"><div><div class="mini-label">STEP 01 · PROVE THE TRANSFER</div><h3>Payment evidence</h3></div><span class="tag">Read only</span></div>
-          <p class="muted">Use an existing verified Base payment, or make one new x402 testnet purchase from the same wallet that will sign the V2 case.</p>
+          <p class="muted">Start from a verified Base transfer. Payment is never inferred from an API claim. The hosted demo cannot initiate new purchases.</p>
           <div class="v2-fresh-checkout" id="v2-case-restore-panel">
             <div class="new-payment-top"><strong>Continue already-paid V2 case</strong><span class="tag">Read only · no new charge</span></div>
-            <p>Base Sepolia transaction <code>0x6edc3d9a...798ae2</code> already paid. Restore the exact evidence for <code>pj_9f2276fd...5f7a2b</code> after a fresh independent USDC receipt check. This will never repurchase the API.</p>
+            <p>Restore the already-paid V2 acceptance case from its original receipt. No new payment or on-chain filing is initiated.</p>
             <div class="v2-buttons">
               <button type="button" id="v2-restore-paid">Restore verified case</button>
             </div>
             <p id="v2-restore-status" role="status" aria-live="polite">Payment exists. Restore it to continue File Case → AI Verdict after reloading the page.</p>
           </div>
-          <div class="v2-fresh-checkout">
+          <div class="v2-fresh-checkout" id="v2-fresh-purchase-panel">
             <div class="new-payment-top"><strong>New x402 test purchase</strong><span class="tag">0.01 test USDC · Base Sepolia</span></div>
             <p>One EIP-3009 signature from GenLayer V2 payer <code>0x4C7c...8Dcb</code>. Exact merchant locked, no private key or server-controlled payment. Only approve after reviewing the live quote and test USDC balance.</p>
             <div class="v2-buttons">
@@ -122,14 +171,14 @@
         </form>
         <aside class="right-stack">
           <div class="result-panel panel" aria-live="polite" id="result">
-            <div class="mini-label">CURRENT CASE STATUS</div><span class="status pending" id="case-status">NOT VERIFIED</span>
+            <div class="mini-label">CURRENT WORKFLOW</div><span class="status pending" id="case-status">NOT VERIFIED</span>
             <h3 id="case-heading">Evidence awaiting review</h3><p id="case-detail">Complete the case form to verify a real Base USDC transfer. A prepared case is not yet an on-chain filing.</p>
             <div class="code-box"><span>Case ID</span><code id="case-id">—</code></div>
             <div class="code-box"><span>On-chain verdict</span><strong id="verdict">UNVERIFIED</strong></div>
             <div class="result-actions"><button type="button" id="read-verdict" disabled>Read GenLayer case ↗</button><button type="button" id="copy-case" disabled>Copy packet</button></div>
           </div>
           <div class="truth-panel panel" id="verification">
-            <div class="mini-label">EVIDENCE STANDARD</div><h3>Nothing is assumed.</h3>
+            <div class="mini-label">SAFETY CONTROLS</div><h3>Evidence, not assumptions.</h3>
             <ul><li><span class="check-symbol">✓</span><div><b>Independent settlement check</b><small>Base receipt, USDC Transfer event, sender, recipient, amount and confirmations.</small></div></li>
             <li><span class="check-symbol">✓</span><div><b>Exact case binding</b><small>One deterministic case identity from payment reference, terms, delivery and evidence.</small></div></li>
             <li><span class="check-symbol">✓</span><div><b>GenLayer readback</b><small>Only a deployed, readable contract can return a case verdict. UI never generates one.</small></div></li>
@@ -138,41 +187,7 @@
         </aside>
       </div>
     </section>
-    <section class="tracker container" id="case-tracker">
-      <div class="tracker-head">
-        <div><div class="eyebrow">ON-CHAIN CASE TRACKER</div><h2>Know where your case stands.</h2>
-          <p>Already have a case? Read the recorded GenLayer decision and independently recheck its Base USDC transfer. No wallet or signing required.</p></div>
-        <span class="tag">Read only · No payments</span>
-      </div>
-      <div class="panel tracker-panel">
-        <form id="track-form" class="tracker-form">
-          <label for="track-version">Contract version
-            <select id="track-version" name="version"><option value="v1">V1 · Verified history</option><option value="v2">V2 · Authorized filing</option></select>
-          </label>
-          <label for="track-id">GenLayer Case ID
-            <input id="track-id" name="caseId" placeholder="pj_…" required pattern="pj_[0-9a-f]{32}" maxlength="35" autocomplete="off" spellcheck="false">
-          </label>
-          <button type="submit" id="track-button">Track case</button>
-          <button type="button" id="track-example" class="tracker-example">Load verified testnet case</button>
-        </form>
-        <p class="tracker-message" id="track-message" role="status" aria-live="polite">Case tracking reads chain data. A verdict is never generated by this website.</p>
-        <div id="track-results" class="tracker-results" hidden>
-          <div class="tracker-metrics">
-            <div><span>GenLayer status</span><strong id="track-status">—</strong></div>
-            <div><span>AI verdict</span><strong id="track-verdict">—</strong></div>
-            <div><span>Base payment proof</span><strong id="track-payment">—</strong></div>
-            <div><span>Case identity binding</span><strong id="track-binding">—</strong></div>
-          </div>
-          <p id="track-reason"></p>
-          <p class="tracker-caveat">The receipt proves only a USDC transfer; adjudication is separate. This readback does not independently audit GenLayer transaction finality or prove merchant delivery quality or claimant authorization.</p>
-          <div class="tracker-links">
-            <a id="track-base-link" href="#" target="_blank" rel="noopener noreferrer" hidden>View Base payment ↗</a>
-            <a id="track-genlayer-link" href="https://explorer-studio.genlayer.com/address/0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8" target="_blank" rel="noopener noreferrer">View GenLayer contract ↗</a>
-          </div>
-        </div>
-      </div>
-    </section>
-    <section class="footer-note container"><div><span class="brand small">PJ</span><p>PAYJURY is an independent proof-and-dispute demo. Not a payment processor, arbitrator with legal authority, or escrow service.</p></div><span>BUILT FOR THE INTERNET COURT ECOSYSTEM · 2026</span></section>
+    <section class="footer-note container"><div><span class="brand small">PJ</span><p>PAYJURY is an independent proof-and-dispute demo. Not a payment processor, arbitrator with legal authority, or escrow service.</p></div><span>BASE SEPOLIA × GENLAYER STUDIONET · DEMO ENVIRONMENT</span></section>
   </main>
 </body>
 </html>

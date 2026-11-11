@@ -1,5 +1,30 @@
 import {assessV2FilingPreflight,KNOWN_RLP_READ_CODE} from './filing-policy.js';
 const $=id=>document.getElementById(id);
+// Presentation, overview and workspace are LAYOUTS, never access-control roles.
+// All actual permissions remain enforced by the user's wallet and GenLayer V2.
+const VALID_VIEWS=new Set(['overview','workspace','demo']);
+function openPayjuryView(requested,{focus=false}={}){
+  const view=VALID_VIEWS.has(requested)?requested:'overview';
+  document.body.dataset.view=view;
+  for(const button of document.querySelectorAll('[data-open-view]')){
+    const active=button.dataset.openView===view;
+    button.classList.toggle('is-active',active);
+    button.setAttribute('aria-pressed',String(active));
+  }
+  const url=new URL(location.href);
+  if(view==='overview')url.searchParams.delete('view');
+  else url.searchParams.set('view',view);
+  history.replaceState(null,'',url.pathname+url.search+url.hash);
+  if(focus){
+    const section=view==='workspace'?$('workflow'):$('case-tracker');
+    section?.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+}
+for(const button of document.querySelectorAll('[data-open-view]')){
+  button.addEventListener('click',()=>openPayjuryView(button.dataset.openView,{focus:true}));
+}
+openPayjuryView(new URL(location.href).searchParams.get('view')||'overview');
+
 const form=$('case-form'), network=$('network'), asset=$('asset');
 const status=$('case-status'),heading=$('case-heading'),detail=$('case-detail');
 let packet=null;
@@ -78,6 +103,12 @@ $('copy-case').addEventListener('click',async()=>{
   }catch{display('COPY FAILED','Clipboard unavailable','Copy the case JSON using a supported browser clipboard permission.','error');}
 });
 fetch('/api/status').then(res=>res.json()).then(data=>{
+  if(data.hostedReadOnly){
+    const fresh=$('v2-fresh-purchase-panel');
+    const historicRestore=$('v2-case-restore-panel');
+    if(fresh)fresh.hidden=true;
+    if(historicRestore)historicRestore.hidden=true;
+  }
   if(!data.paymentVerifierConfigured){
     display('CONFIGURATION REQUIRED','Base RPC not configured',
       'Set BASE_RPC_URL on the local server to verify real token transfers. No demo evidence is fabricated.','pending');
@@ -86,12 +117,66 @@ fetch('/api/status').then(res=>res.json()).then(data=>{
 
 
 const CASE_ID=/^pj_[0-9a-f]{32}$/;
+let lastVerifiedTrack=null;
+function proofState({phase='reading',title='Reading on-chain decision…',subtitle='Rechecking original evidence'}={}){
+  const cover=$('track-outcome');
+  cover.textContent=title;
+  $('track-outcome-subtitle').textContent=subtitle;
+  const signal=$('track-signal');
+  signal.dataset.phase=phase;
+  signal.textContent=phase==='complete'?'VERIFIED READBACK':phase==='partial'?'PARTIAL READBACK':
+    phase==='error'?'READ UNAVAILABLE':'LIVE QUERY';
+}
+$('track-copy-id').addEventListener('click',async()=>{
+  if(!lastVerifiedTrack)return;
+  const button=$('track-copy-id');
+  try{
+    await navigator.clipboard.writeText(lastVerifiedTrack.caseId);
+    button.textContent='Copied ✓';
+    setTimeout(()=>button.textContent='Copy Case ID',1400);
+  }catch{
+    $('track-message').textContent='Clipboard permission unavailable. Select the Case ID above to copy it.';
+  }
+});
+$('track-export').addEventListener('click',()=>{
+  if(!lastVerifiedTrack)return;
+  const record=lastVerifiedTrack;
+  const summary={
+    product:'PAYJURY V2',source:'Live readback; NOT a signed attestation',
+    caseId:record.caseId,contractVersion:record.contractVersion,
+    contractAddress:record.contractAddress,caseStatus:record.caseStatus,
+    verdict:record.caseStatus==='DECIDED'?record.verdict:null,
+    reason:record.caseStatus==='DECIDED'?record.reason:null,
+    payment:{network:record.network,txHash:record.txHash,payer:record.payer,
+      payee:record.payee,amountAtomic:record.amountAtomic,asset:record.asset,
+      settlement:record.settlement},
+    identityBinding:record.identityBinding,
+    disclaimer:'This readback does not independently prove GenLayer TX finality, HTTP payload correctness, or refund rights.'
+  };
+  const blob=new Blob([JSON.stringify(summary,null,2)],{type:'application/json'});
+  const downloadUrl=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=downloadUrl;
+  link.download='payjury-'+record.caseId+'.json';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(()=>URL.revokeObjectURL(downloadUrl),1500);
+});
 $('track-form').addEventListener('submit',async event=>{
   event.preventDefault();
   const id=$('track-id').value.trim();
   const message=$('track-message'),button=$('track-button');
+  lastVerifiedTrack=null;
+  $('track-copy-id').disabled=true;
+  $('track-export').disabled=true;
   $('track-results').hidden=true;
   $('track-base-link').hidden=true;
+  proofState({phase:'reading',title:'Verifying original evidence…',
+    subtitle:'Fresh GenLayer read and independent Base settlement check'});
+  $('proof-stage-payment').textContent='Checking Base receipt';
+  $('proof-stage-case').textContent='Reading case V2';
+  $('proof-stage-decision').textContent='Reading AI verdict';
   if(!CASE_ID.test(id)){message.textContent='Invalid case ID. Use pj_ followed by 32 lowercase hex characters.';return;}
   button.disabled=true;
   message.textContent='Reading GenLayer and independently checking the Base receipt. No signing or payment.';
@@ -101,6 +186,23 @@ $('track-form').addEventListener('submit',async event=>{
     const data=await res.json();
     if(!res.ok)throw Error(data.error||'Case readback unavailable');
     if(data.caseId!==id||!['FILED','DECIDED'].includes(data.caseStatus))throw Error('Unexpected case readback');
+    if(data.contractVersion!==version)throw Error('Contract version mismatch');
+    lastVerifiedTrack=data;
+    $('track-copy-id').disabled=false;
+    const paymentVerified=data.settlement?.status==='BASE_USDC_TRANSFER_VERIFIED';
+    const idMatched=data.identityBinding==='DETERMINISTIC_ID_MATCHED';
+    const decided=data.caseStatus==='DECIDED';
+    const consistent=paymentVerified&&idMatched;
+    proofState({
+      phase:consistent?'complete':'partial',
+      title:decided?String(data.verdict||'DECIDED'):'FILED · awaiting decision',
+      subtitle:decided?'Recorded AI verdict · '+version.toUpperCase()+' GenLayer readback':
+        'Case found on GenLayer · no AI verdict recorded yet'
+    });
+    $('proof-stage-payment').textContent=paymentVerified?'USDC transfer verified':'Transfer not verified';
+    $('proof-stage-case').textContent=idMatched?'Canonical ID matched':'Case identity mismatch';
+    $('proof-stage-decision').textContent=decided?'Recorded: '+String(data.verdict):'Decision pending';
+    $('track-export').disabled=false;
     $('track-status').textContent=data.caseStatus;
     $('track-verdict').textContent=data.caseStatus==='DECIDED'?data.verdict:'PENDING';
     $('track-payment').textContent=data.settlement?.status==='BASE_USDC_TRANSFER_VERIFIED'?
@@ -115,7 +217,6 @@ $('track-form').addEventListener('submit',async event=>{
       $('track-base-link').href='https://'+domain+'/tx/'+data.txHash;
       $('track-base-link').hidden=false;
     }
-    if(data.contractVersion!==version)throw Error('Contract version mismatch');
     if(WALLET_ADDR.test(data.contractAddress||'')){
       $('track-genlayer-link').href='https://explorer-studio.genlayer.com/address/'+data.contractAddress;
       $('track-genlayer-link').textContent='View GenLayer '+version.toUpperCase()+' contract ↗';
@@ -130,12 +231,24 @@ $('track-form').addEventListener('submit',async event=>{
     message.textContent=flags.length?flags.join(' '):
       'On-chain case read and Base transfer independently checked. Review the AI decision scope below.';
   }catch(error){
+    proofState({phase:'error',title:'Live proof unavailable',
+      subtitle:'No result is assumed. Refresh when both networks are reachable.'});
+    $('proof-stage-payment').textContent='Read unavailable';
+    $('proof-stage-case').textContent='Read unavailable';
+    $('proof-stage-decision').textContent='Read unavailable';
     message.textContent=String(error?.message||'Case lookup unavailable').slice(0,220);
   }finally{button.disabled=false;}
 });
+const VERIFIED_V2_CASE='pj_9f2276fd1904120b16d5f5b6ea5f7a2b';
 $('track-example').addEventListener('click',()=>{
-  $('track-version').value='v1';
-  $('track-id').value='pj_3f6b4f29a744db71c63f9acf552d2a19';
+  $('track-version').value='v2';
+  $('track-id').value=VERIFIED_V2_CASE;
+  $('track-form').requestSubmit();
+});
+// The landing page is a proof-first demo. This is one read-only lookup,
+// never a payment, a wallet signature or a GenLayer write.
+queueMicrotask(()=>{
+  if(!$('track-id').value)$('track-id').value=VERIFIED_V2_CASE;
   $('track-form').requestSubmit();
 });
 
@@ -150,8 +263,11 @@ function v2Controls(){
   const enabled=Boolean(v2Address);
   $('v2-connect').disabled=!enabled||v2Busy;
   const signed=enabled&&Boolean(v2Wallet)&&!v2Busy;
-  const prepared=Boolean(verifiedPacket)&&verifiedPacket.txHash!==V1_HISTORIC_TX;
-  $('v2-file').disabled=!signed||!prepared;
+  const decidedHistorical=verifiedPacket?.caseId===VERIFIED_V2_CASE;
+  const alreadyFiled=Boolean(trackedCaseV2&&trackedCaseV2.caseId===verifiedPacket?.caseId&&
+    ['FILED','DECIDED'].includes(trackedCaseV2.caseStatus));
+  const prepared=Boolean(verifiedPacket)&&verifiedPacket.txHash!==V1_HISTORIC_TX&&!decidedHistorical;
+  $('v2-file').disabled=!signed||!prepared||alreadyFiled;
   $('v2-authorize').disabled=!signed||!prepared||v2Wallet.toLowerCase()!==verifiedPacket.payer.toLowerCase();
   $('v2-revoke').disabled=$('v2-authorize').disabled;
   const pending=trackedCaseV2&&trackedCaseV2.caseStatus==='FILED'&&
@@ -183,6 +299,8 @@ function updateV2PreparedPacket(next){
     $('v2-payment').textContent=next.amountAtomic+' atomic USDC · '+next.network;
     v2Message(next.txHash===V1_HISTORIC_TX?
       'This historic payment was already filed and decided in V1. Do not file it again.':
+      next.caseId===VERIFIED_V2_CASE?
+        'The completed V2 case must be tracked read-only. Filing and adjudication are disabled for this case.':
       v2Address?'Base payment independently verified. Connect a GenLayer wallet and review filing rights.':
       'Evidence is prepared, but V2 has not been deployed and verified. Signing stays disabled.');
   }

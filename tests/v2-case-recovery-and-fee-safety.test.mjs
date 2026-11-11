@@ -83,7 +83,8 @@ test('V2 wallet write fee simulation is completed before browser attempt lock',a
   const html=await readFile(new URL('../web/index.html',import.meta.url),'utf8');
   assert.match(studio,/export async function estimateV2WriteFees\(/);
   assert.match(studio,/export async function sendV2Write\(address,fn,args,estimatedFees\)/);
-  const source=app.slice(app.indexOf('async function v2Write('),app.indexOf('fetch(\'/api/status\')'));
+  const start=app.indexOf('async function v2Write(');
+  const source=app.slice(start,app.indexOf('fetch(\'/api/status\')',start));
   const estimateAt=source.indexOf('sdk.estimateV2WriteFees(');
   const lockAt=source.indexOf("writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN'");
   const writeAt=source.indexOf('sdk.sendV2Write(');

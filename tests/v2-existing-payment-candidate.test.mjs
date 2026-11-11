@@ -104,7 +104,7 @@ test('Mainnet candidate cannot silently use Sepolia RPC when Base Mainnet is not
     const status=await (await fetch(base+'/api/status')).json();
     assert.equal(status.baseMainnetRpcConfigured,false);
     assert.equal(status.baseSepoliaRpcConfigured,true);
-  },{mainnet:undefined,inspect:async()=>{called++;return verified;}});
+  },{mainnet:null,inspect:async()=>{called++;return verified;}});
   assert.equal(called,0);
 });
 test('Get transfer discovery uses mainnet RPC only when mainnet is chosen',async()=>{

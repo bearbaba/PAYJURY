@@ -4,7 +4,7 @@
 
 PAYJURY is a non-custodial, evidence-first dispute lab for paid AI/API services. It connects the **x402 HTTP payment standard** with **GenLayer Intelligent Contracts** through a minimal **Pay → Dispute → Verdict** experience.
 
-> **Build status: foundation, not a verified E2E demonstration.** The web UI and read-only Base settlement verifier are implemented. A dedicated GenLayer contract source is included but is **not deployed by this repository**. An independently verified payment plus a finalized GenLayer case is still required before making full partner-demo claims. **9.5/10 is an internal quality target, not a confirmed jury score.**
+> **Build status: foundation, not a verified E2E demonstration.** The web UI, read-only Base settlement verifier, and guarded official x402 SDK payer CLI are implemented, but a PAYJURY-specific paid transaction is not yet verified. A dedicated GenLayer contract source is included but is **not deployed by this repository**. An independently verified payment plus a finalized GenLayer case is still required before making full partner-demo claims. **9.5/10 is an internal quality target, not a confirmed jury score.**
 
 ## Why PAYJURY
 
@@ -68,7 +68,7 @@ Set `GENLAYER_CONTRACT_ADDRESS` to an **actually deployed PayJury contract**, no
 - `FILED` — contract stores a case, not a verdict.
 - `DECIDED` — contract readback reports an AI-adjudicated verdict; verify actual GenVM execution and transaction finality separately before claiming a full E2E pass.
 
-No escrow, bridge, automatic refund, permissionless debt collection, or legally binding arbitration is implemented. Wallet keys are never passed to the web UI. See [Security](docs/SECURITY.md).
+No escrow, bridge, automatic refund, permissionless debt collection, or legally binding arbitration is implemented. Wallet keys are never passed to the web UI; only a separately approved, dedicated testnet payer CLI uses a key. See [Security](docs/SECURITY.md).
 
 ## Partner and developer references
 
@@ -76,3 +76,7 @@ No escrow, bridge, automatic refund, permissionless debt collection, or legally 
 - [Official x402 SDK](https://github.com/x402-foundation/x402)
 - [GenLayer Studio — Studionet 61999](https://docs.genlayer.com/developers/intelligent-contracts/tools/genlayer-studio)
 - [PAYJURY acceptance gates](docs/ACCEPTANCE.md)
+
+## Optional real x402 payment client
+
+The official x402 SDK is wired in `scripts/pay-x402-testnet.mjs`, with exact Base Sepolia USDC, an approved merchant, **0.01 test USDC maximum**, EIP-3009-only policy and a permanent one-shot marker. This CLI **may spend actual testnet USDC** and has **not** been executed as PAYJURY acceptance. The public web never pays or signs. Read [Live x402 client safety](docs/X402_LIVE_CLIENT.md) before any live attempt.

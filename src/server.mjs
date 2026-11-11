@@ -297,7 +297,7 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
         catch{respond(res,422,{error:'GenLayer case not independently readable or not configured. Do not infer a verdict.'});}
         return;
       }
-      if(req.method==='GET'&&['/','/app.js','/styles.css','/studio-wallet.bundle.js'].includes(url.pathname)){
+      if(req.method==='GET'&&['/','/app.js','/filing-policy.js','/styles.css','/studio-wallet.bundle.js'].includes(url.pathname)){
         const name=url.pathname==='/'?'index.html':url.pathname.slice(1);
         const content=await readFile(path.join(ROOT,name));
         res.writeHead(200,{'content-type':MIME[path.extname(name)],'x-content-type-options':'nosniff',

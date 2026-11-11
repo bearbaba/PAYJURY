@@ -2,6 +2,16 @@ const $=id=>document.getElementById(id);
 const form=$('case-form'), network=$('network'), asset=$('asset');
 const status=$('case-status'),heading=$('case-heading'),detail=$('case-detail');
 let packet=null;
+function setWorkflowStage(next){
+  const stage=Math.max(1,Math.min(4,Number(next)||1));
+  for(const step of document.querySelectorAll('[data-workflow-step]')){
+    const n=Number(step.dataset.workflowStep);
+    step.classList.toggle('current',n===stage);
+    step.classList.toggle('done',n<stage);
+    if(n===stage)step.setAttribute('aria-current','step');
+    else step.removeAttribute('aria-current');
+  }
+}
 const USDC={
   'eip155:84532':'0x036cbd53842c5426634e7929541ec2318f3dcf7e',
   'eip155:8453':'0x833589fcD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -13,6 +23,7 @@ function display(label,title,message,tone) {
 }
 form.addEventListener('submit',async event=>{
   event.preventDefault();packet=null;updateV2PreparedPacket(null);
+  setWorkflowStage(2);
   $('copy-case').disabled=true;$('read-verdict').disabled=true;
   const button=$('verify-btn');button.disabled=true;
   display('VERIFYING','Checking the Base chain','Reading a real transaction receipt. Nothing is paid or signed.','pending');
@@ -25,6 +36,7 @@ form.addEventListener('submit',async event=>{
       throw Error('Base settlement evidence was not independently verified');
     packet=body;
     updateV2PreparedPacket(packet);
+    setWorkflowStage(3);
     $('track-id').value=packet.caseId;
     $('case-id').textContent=packet.caseId;
     $('verdict').textContent='NOT FILED';
@@ -32,6 +44,7 @@ form.addEventListener('submit',async event=>{
     display('TRANSFER VERIFIED','Case prepared — not filed',
       'On-chain USDC Transfer verified with '+packet.settlement.confirmations+' confirmations. This packet still needs an actual GenLayer filing and adjudication.','success');
   } catch(error) {
+    setWorkflowStage(2);
     $('case-id').textContent='—';$('verdict').textContent='UNVERIFIED';
     display('NOT VERIFIED','No verified case prepared',
       String(error?.message||'Verification failed').slice(0,200),'error');
@@ -159,6 +172,10 @@ function updateV2PreparedPacket(next){
   verifiedPacket=next;
   trackedCaseV2=null;
   $('v2-overview').hidden=true;
+  if(!next){
+    v2Message(v2Address?'Payment or evidence changed. Verify again before any wallet action.':
+      'V2 signing is not available. Prepare evidence read-only or track a completed V1 case.');
+  }
   if(next?.settlement?.result==='BASE_USDC_TRANSFER_VERIFIED'){
     $('v2-overview').hidden=false;
     $('v2-case').textContent=next.caseId;
@@ -172,6 +189,7 @@ function updateV2PreparedPacket(next){
 }
 function updateV2TrackedCase(data){
   trackedCaseV2=data;
+  setWorkflowStage(data.caseStatus==='FILED'||data.caseStatus==='DECIDED'?4:3);
   if(v2Address&&data.caseStatus==='FILED'){
     v2Message('V2 case is FILED. The claimant or payer can request a GenLayer AI decision.');
   } else if(data.caseStatus==='DECIDED'){
@@ -297,15 +315,18 @@ fetch('/api/status').then(r=>r.json()).then(data=>{
   if(data.v2FilingEnabled&&WALLET_ADDR.test(a)&&
     a.toLowerCase()!=='0xd57a04c3cc304ab30c9435a9ae34a840802f11c8'){
     v2Address=a;
+    $('deployment-message').textContent='V2 address configured. Contract identity must be verified before wallet signing. V1 cases remain read-only.';
     $('v2-mode').textContent='V2 · Wallet approvals';
     $('v2-explanation').textContent='Verified Base transfer first, then connect your own GenLayer Studionet wallet. Direct payer filing or payer-approved delegation only; each write requires your confirmation.';
     v2Message('V2 contract is configured. This is NOT proof of deployment or security audit; verify the actual contract source and address before signing.');
   }else{
+    $('deployment-message').textContent='V2 not deployed — prepare evidence safely; filing and wallet approvals remain locked. V1 cases are available below.';
     $('v2-mode').textContent='V2 · Not deployed';
     $('v2-explanation').textContent='PAYJURY V2 adds payer/delegate authorization. Until its new address is separately deployed and verified, signing stays disabled; the completed V1 case remains readable above.';
   }
   v2Controls();
 }).catch(()=>{
+  $('deployment-message').textContent='Cannot check V2 availability. Signing remains disabled; retry when the server is reachable.';
   v2Message('Cannot verify V2 configuration. All GenLayer signing controls stay disabled.');
 });
 $('v2-connect').addEventListener('click',async()=>{
@@ -459,14 +480,37 @@ $('autofill-transfer').addEventListener('click',async()=>{
       ['payer',data.payer],['payee',data.payee],
       ['amountAtomic',data.amountAtomic],['asset',data.asset]
     ])form.elements.namedItem(name).value=value;
+    setWorkflowStage(2);
     message.textContent='USDC Transfer verified with '+data.confirmations+
       ' confirmations. Payer, payee, amount and token filled automatically. Enter the paid API endpoint and delivery evidence next.';
     display('TRANSFER VERIFIED','Payment details detected — not filed',
       'The Base USDC Transfer was checked independently. A transfer alone is not proof of correct x402 API delivery. Complete case evidence before review.','success');
   }catch(error){
+    setWorkflowStage(1);
     message.textContent=String(error?.message||'Transfer lookup unavailable').slice(0,220)+
       '. No values were assumed, and no transaction was sent.';
     display('NOT VERIFIED','Cannot auto-fill this transaction',
       'Review the network and TX hash. Ambiguous token transfers are not auto-selected.','error');
   }finally{button.disabled=false;}
+});
+
+/* Invalidate prepared evidence immediately if the source form changes.
+   Prevent stale case IDs/approvals when a user edits payment or delivery data. */
+form.addEventListener('input',event=>{
+  if(event.target.closest('.filing-v2'))return;
+  const field=event.target.name;
+  if(['network','txHash','amountAtomic','endpoint','payer','payee',
+      'terms','delivery','evidence','paymentResponseHeader'].includes(field)){
+    if(packet){
+      packet=null;
+      updateV2PreparedPacket(null);
+      $('copy-case').disabled=true;
+      $('read-verdict').disabled=true;
+      $('case-id').textContent='—';
+      $('verdict').textContent='UNVERIFIED';
+      display('REVIEW NEEDED','Case details changed',
+        'Verify the payment and prepare the revised case before any GenLayer action.','pending');
+    }
+    setWorkflowStage(['terms','delivery','evidence'].includes(field)?2:1);
+  }
 });

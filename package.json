@@ -21,7 +21,8 @@
     "build:web": "esbuild web/studio-wallet.mjs --bundle --platform=browser --format=esm --target=es2022 --outfile=web/studio-wallet.bundle.js",
     "v2:verify": "node scripts/verify-v2-deployment.mjs",
     "v2:candidate": "node scripts/inspect-existing-spendproof-v2.mjs",
-    "v2:fresh-preflight": "node --env-file-if-exists=.env scripts/v2-fresh-preflight.mjs"
+    "v2:fresh-preflight": "node --env-file-if-exists=.env scripts/v2-fresh-preflight.mjs",
+    "v2:diagnose": "node --env-file-if-exists=.env scripts/diagnose-v2-read.mjs"
   },
   "dependencies": {
     "@x402/core": "2.30.0",

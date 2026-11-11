@@ -80,3 +80,8 @@ No escrow, bridge, automatic refund, permissionless debt collection, or legally 
 ## Optional real x402 payment client
 
 The official x402 SDK is wired in `scripts/pay-x402-testnet.mjs`, with exact Base Sepolia USDC, an approved merchant, **0.01 test USDC maximum**, EIP-3009-only policy and a permanent one-shot marker. This CLI **may spend actual testnet USDC** and has **not** been executed as PAYJURY acceptance. The public web never pays or signs. Read [Live x402 client safety](docs/X402_LIVE_CLIENT.md) before any live attempt.
+
+## Agent workflow & presentation
+
+- [PAYJURY agent skill](SKILL.md): quote → independent payment verification → immutable dispute → GenLayer readback, with fail-closed response states.
+- [45-second truthful demo guide](docs/DEMO_45S.md): storyboard and real transaction proof requirements.

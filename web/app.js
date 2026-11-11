@@ -194,6 +194,13 @@ async function getV2Sdk(){
   if(!v2Sdk)v2Sdk=await import('/studio-wallet.bundle.js');
   return v2Sdk;
 }
+async function requireGenuineV2Interface(sdk){
+  if(!v2Address)throw Error('V2 contract not configured');
+  const marker=await sdk.readV2Contract(v2Address,'version',[]);
+  if(marker!=='PAYJURY_V2_PAYMENT_SCOPED_AUTH_V1')
+    throw Error('Contract V2 identity mismatch. Signing blocked; verify deployment address and source.');
+}
+
 async function refreshRecordedTransaction(caseId,method,hash){
   const sdk=await getV2Sdk();
   const state=await sdk.checkV2Transaction(hash);
@@ -304,6 +311,7 @@ $('v2-connect').addEventListener('click',async()=>{
   $('v2-connect').disabled=true;
   try{
     const sdk=await getV2Sdk();
+    await requireGenuineV2Interface(sdk);
     const address=await sdk.connectGenLayerWallet();
     v2Wallet=address;
     $('v2-signer').textContent=address;
@@ -330,6 +338,7 @@ $('v2-file').addEventListener('click',async()=>{
     if(again.caseId!==p.caseId||again.settlement?.result!=='BASE_USDC_TRANSFER_VERIFIED')
       throw Error('Case evidence changed since verification. Verify again.');
     const sdk=await getV2Sdk();
+    await requireGenuineV2Interface(sdk);
     const state=await sdk.readV2Contract(v2Address,'filing_status',[
       p.caseId,p.network,p.txHash,p.token,p.payer,p.payee,p.amountAtomic,v2Wallet
     ]);
@@ -358,6 +367,7 @@ async function authorizeDelegate(enabled){
   const key=payer+':'+network+':'+txHash+':delegate:'+delegate;
   try{
     const sdk=await getV2Sdk();
+    await requireGenuineV2Interface(sdk);
     const permission=await sdk.readV2Contract(v2Address,'can_file_for',[payer,delegate]);
     if(typeof permission!=='boolean')throw Error('Delegation status was not a verified boolean.');
     if(permission===enabled){
@@ -389,6 +399,7 @@ $('v2-adjudicate').addEventListener('click',async()=>{
     data.settlement?.status!=='BASE_USDC_TRANSFER_VERIFIED')return;
   try{
     const sdk=await getV2Sdk();
+    await requireGenuineV2Interface(sdk);
     let record=await sdk.readV2Contract(v2Address,'get_case',[data.caseId]);
     if(typeof record==='string')record=JSON.parse(record);
     if(record?.status!=='FILED'||record.case_id!==data.caseId)

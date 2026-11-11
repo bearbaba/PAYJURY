@@ -1,0 +1,41 @@
+name: PAYJURY quality gates
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies without lifecycle scripts
+        run: npm install --ignore-scripts --no-fund --no-audit
+      - name: Validate JavaScript syntax
+        run: |
+          node --check src/payment.mjs
+          node --check src/x402.mjs
+          node --check src/server.mjs
+          node --check scripts/inspect-x402-quote.mjs
+          node --check web/app.js
+      - name: Offline unit tests and Python contract syntax
+        run: npm run check
+      - name: Block accidental committed secrets
+        run: |
+          test ! -f .env
+          test ! -f .env.local
+          test ! -f .openserv.json
+      - name: Verify GenLayer SDK dependency import without any keys
+        run: |
+          node --input-type=module -e "import {createAccount,createClient} from 'genlayer-js'; import {studionet} from 'genlayer-js/chains'; if(studionet.id!==61999 || typeof createClient!=='function' || typeof createAccount!=='function') process.exit(1)"

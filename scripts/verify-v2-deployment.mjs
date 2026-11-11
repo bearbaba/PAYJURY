@@ -118,7 +118,7 @@ export async function verifyV2ReadOnly({getTransaction,readContract,getContractC
   const correctMethods=out.version===V2_MARKER&&out.payerCanFile===true&&out.strangerCanFile===false;
   out.result=successfulTx&&correctMethods&&out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'&&out.sourceIdentity!=='SOURCE_FORMAT_ONLY_DIFFERENCE'?
     'V2_DEPLOY_AND_AUTHORIZATION_READBACK_PASS':correctMethods&&
-      out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'?
+      out.sourceIdentity!=='SOURCE_TEXT_MISMATCH'&&out.sourceIdentity!=='SOURCE_FORMAT_ONLY_DIFFERENCE'?
       'V2_METHODS_PASS_DEPLOY_TX_READ_UNCONFIRMED':'V2_NOT_READY_FOR_SIGNING';
   if(out.sourceIdentity==='SOURCE_TEXT_MISMATCH')
     out.warnings.push('SOURCE_MISMATCH: do not enable signing. Confirm deployed source independently.');

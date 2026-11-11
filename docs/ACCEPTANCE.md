@@ -35,3 +35,7 @@ Payment authorizations and GenLayer writes **must be separately approved**, usin
 Base USDC transfers are EVM `eth_*` transactions (Base Sepolia ID 84532 or Base Mainnet ID 8453). PAYJURY adjudication is GenLayer Studionet `gen_*` (ID 61999). They are **different chains**, and a GenLayer LLM alone cannot attest cross-chain payments. `src/payment.mjs` does the independent read-only EVM verification off chain; on-chain case fields are submitted assertions to be cross-checked against that evidence.
 
 **Status:** Foundation implementation prepared; do not call the project E2E PASS until all unchecked live gates are completed.
+
+## Candidate address provided 11 Nov 2026
+
+The operator provided a GenLayer Studio import URL containing the **candidate** address `0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8` on Studionet (61999). This is **not yet confirmed deployed or source-matched** solely from the URL. Run `npm run contract:verify` after `git pull --ff-only` in Codespaces. The read-only probe checks `gen_getContractCode` against **finalized** chain state, then SHA-256 compares the decoded source to `contracts/PayJury.py` (normalizing line endings). If it reports `SOURCE_MATCHED_FINALIZED_STATE`, still collect the actual deploy transaction hash and independently inspect `FINALIZED` and GenVM `SUCCESS` before marking deployment accepted. A mismatched source must not be configured in the web.

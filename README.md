@@ -85,3 +85,15 @@ The official x402 SDK is wired in `scripts/pay-x402-testnet.mjs`, with exact Bas
 
 - [PAYJURY agent skill](SKILL.md): quote → independent payment verification → immutable dispute → GenLayer readback, with fail-closed response states.
 - [45-second truthful demo guide](docs/DEMO_45S.md): storyboard and real transaction proof requirements.
+
+## Verify a proposed Studionet deployment (read-only)
+
+The candidate Studio import URL supplied on 11 Nov 2026 contains address `0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8`. This is a **candidate, not yet verified by this repository**. Run:
+
+```bash
+npm run contract:verify
+```
+
+The command checks finalized contract code via the official Studionet RPC (`gen_getContractCode`) and compares its source to the repository's `contracts/PayJury.py`. It performs **no signed actions**. `SOURCE_MATCHED_FINALIZED_STATE` means the code is visible at that address in finalized chain state. It is **not** a substitute for checking the original deployment TX hash / GenVM success in the Explorer. A mismatched or unavailable code read must not unlock GenLayer writes or be reported as deployed.
+
+Only after verifying both source and deployment TX should you set `GENLAYER_CONTRACT_ADDRESS` locally in `.env` and restart the web server; the web remains read-only.

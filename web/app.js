@@ -1,5 +1,7 @@
 import {assessV2FilingPreflight,KNOWN_RLP_READ_CODE} from './filing-policy.js';
 const $=id=>document.getElementById(id);
+const NEW_LIVE_SESSION='payjury-v2-web-one-take-20261111';
+let freshHostedBlocked=false;
 // Presentation, overview and workspace are LAYOUTS, never access-control roles.
 // All actual permissions remain enforced by the user's wallet and GenLayer V2.
 const VALID_VIEWS=new Set(['overview','workspace','demo']);
@@ -103,11 +105,36 @@ $('copy-case').addEventListener('click',async()=>{
   }catch{display('COPY FAILED','Clipboard unavailable','Copy the case JSON using a supported browser clipboard permission.','error');}
 });
 fetch('/api/status').then(res=>res.json()).then(data=>{
+  const freshPanel=$('v2-fresh-purchase-panel');
+  const historicRestore=$('v2-case-restore-panel');
   if(data.hostedReadOnly){
-    const fresh=$('v2-fresh-purchase-panel');
-    const historicRestore=$('v2-case-restore-panel');
-    if(fresh)fresh.hidden=true;
+    if(freshPanel)freshPanel.hidden=true;
     if(historicRestore)historicRestore.hidden=true;
+  }else if(data.newPaymentEnabled){
+    if(freshPanel)freshPanel.hidden=false;
+    if(historicRestore)historicRestore.hidden=true;
+    // A separate read-only status check prevents even showing the
+    // pay button once a globally reserved demo session is spent.
+    freshHostedBlocked=true;
+    refreshFreshButtons();
+    fetch('/api/v2/x402/session',{cache:'no-store'})
+      .then(async response=>{
+        const data=await response.json();
+        if(!response.ok||data.readOnly!==true||data.session!==NEW_LIVE_SESSION)
+          throw Error('Cannot verify global payment lock');
+        return data;
+      }).then(session=>{
+        freshHostedBlocked=session.locked!==false;
+        if(freshHostedBlocked)
+          freshMessage('One-shot hosted session already reserved. Never pay again; inspect the original wallet/chain evidence.');
+        else
+          freshMessage('ONE LIVE TESTNET CHECKOUT AVAILABLE. Review the 0.01 USDC quote first. The wallet must authorize every payment.');
+        refreshFreshButtons();
+      }).catch(()=>{
+        freshHostedBlocked=true;
+        freshMessage('Cannot verify durable payment lock. Checkout blocked; no signature requested.');
+        refreshFreshButtons();
+      });
   }
   if(!data.paymentVerifierConfigured){
     display('CONFIGURATION REQUIRED','Base RPC not configured',
@@ -715,15 +742,15 @@ const freshStatus=$('v2-pay-status');
 let freshReady=false,freshBusy=false;
 function freshMessage(value){freshStatus.textContent=value;}
 function refreshFreshButtons(){
-  const historicalLock=(()=>{
+  const sessionLock=(()=>{
     try{return Boolean(globalThis.localStorage?.getItem(
-      'payjury:v2:one-paid-x402:0x4c7cb73ac8f8999af21cfc9ff4cf2333a9508dcb'));}
+      'payjury:v2:one-paid-x402:0x4c7cb73ac8f8999af21cfc9ff4cf2333a9508dcb:'+NEW_LIVE_SESSION));}
     catch{return true;}
   })();
-  freshQuoteButton.disabled=freshBusy;
-  freshPayButton.disabled=freshBusy||!freshReady||historicalLock;
-  if(historicalLock&&freshStatus.textContent.includes('No new payment has been signed'))
-    freshMessage('A previous V2 x402 payment attempt is locked in this browser. Inspect the original wallet/provider activity; never pay twice.');
+  freshQuoteButton.disabled=freshBusy||freshHostedBlocked||sessionLock;
+  freshPayButton.disabled=freshBusy||!freshReady||freshHostedBlocked||sessionLock;
+  if(sessionLock&&freshStatus.textContent.includes('No new payment has been signed'))
+    freshMessage('This new testnet session has already attempted payment. Review the original TX; never retry an unknown outcome.');
 }
 freshQuoteButton.addEventListener('click',async()=>{
   if(freshBusy)return;
@@ -750,7 +777,30 @@ freshQuoteButton.addEventListener('click',async()=>{
   }finally{freshBusy=false;refreshFreshButtons();}
 });
 freshPayButton.addEventListener('click',async()=>{
-  if(freshBusy||!freshReady)return;
+  if(freshBusy||!freshReady||freshHostedBlocked)return;
+  // Check shared lock BEFORE wallet confirmation; the backend also enforces
+  // an atomic SET NX immediately before forwarding the signed request.
+  if(!($('v2-fresh-purchase-panel')?.hidden)){
+    try{
+      const r=await fetch('/api/v2/x402/session',{cache:'no-store'});
+      if(r.ok){
+        const state=await r.json();
+        if(state.session===NEW_LIVE_SESSION&&state.locked===true){
+          freshHostedBlocked=true;freshReady=false;refreshFreshButtons();
+          freshMessage('This payment session is already locked on the server. Never send again.');
+          return;
+        }
+        if(state.session!==NEW_LIVE_SESSION||state.readOnly!==true||state.locked!==false)
+          throw Error('Unknown lock state');
+      }else if(location.hostname.endsWith('.vercel.app')){
+        throw Error('Server-side lock cannot be checked');
+      }
+    }catch{
+      freshHostedBlocked=true;freshReady=false;refreshFreshButtons();
+      freshMessage('Cannot verify the payment lock. No signature requested.');
+      return;
+    }
+  }
   const approved=globalThis.confirm(
     'Authorize EXACTLY ONE NEW testnet x402 purchase?\n'+
     'Payer: 0x4C7cb73ac8f8999af21cfc9fF4cF2333a9508Dcb\n'+

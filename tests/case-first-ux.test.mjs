@@ -45,7 +45,7 @@ test('workflow has four accessible phases and no misleading permanent read-only 
     const html=await (await fetch(base+'/')).text();
     assert.deepEqual([...html.matchAll(/data-workflow-step="(\d)"/g)].map(m=>Number(m[1])),
       [1,2,3,4]);
-    assert.match(html,/One place\./);
+    assert.match(html,/Manage a case\. Not a dozen tabs\./);
     assert.doesNotMatch(html,/Nothing is signed or paid by this page\./);
     assert.match(html,/filing and wallet approvals remain locked|Wallet signing remains unavailable/);
     assert.match(html,/id="v2-connect" disabled/);

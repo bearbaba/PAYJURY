@@ -518,3 +518,96 @@ form.addEventListener('input',event=>{
     setWorkflowStage(['terms','delivery','evidence'].includes(field)?2:1);
   }
 });
+
+/* Fresh x402 V2 acceptance: one explicit wallet-authorized 0.01 TEST USDC
+   purchase. No auto-pay, no key export, no retry on ambiguous results. */
+const freshQuoteButton=$('v2-pay-quote'),freshPayButton=$('v2-pay-once');
+const freshStatus=$('v2-pay-status');
+let freshReady=false,freshBusy=false;
+function freshMessage(value){freshStatus.textContent=value;}
+function refreshFreshButtons(){
+  const historicalLock=(()=>{
+    try{return Boolean(globalThis.localStorage?.getItem(
+      'payjury:v2:one-paid-x402:0x4c7cb73ac8f8999af21cfc9ff4cf2333a9508dcb'));}
+    catch{return true;}
+  })();
+  freshQuoteButton.disabled=freshBusy;
+  freshPayButton.disabled=freshBusy||!freshReady||historicalLock;
+  if(historicalLock&&freshStatus.textContent.includes('No new payment has been signed'))
+    freshMessage('A previous V2 x402 payment attempt is locked in this browser. Inspect the original wallet/provider activity; never pay twice.');
+}
+freshQuoteButton.addEventListener('click',async()=>{
+  if(freshBusy)return;
+  freshBusy=true;refreshFreshButtons();
+  freshMessage('Checking live HTTP 402, exact testnet merchant, Base Sepolia RPC and official test USDC balance. No signature.');
+  try{
+    const response=await fetch('/api/v2/x402/quote',{method:'GET',cache:'no-store'});
+    const out=await response.json();
+    if(!response.ok)throw Error(out.error||'Read-only quote unavailable');
+    freshReady=out.result==='V2_FRESH_PAYER_QUOTE_AND_BALANCE_READY_READ_ONLY'&&
+      out.wallet==='0x4c7cb73ac8f8999af21cfc9ff4cf2333a9508dcb'&&
+      out.network==='eip155:84532'&&out.amountAtomic===undefined&&
+      out.requiredAtomic==='10000'&&out.quoteVerified===true;
+    if(freshReady){
+      freshMessage('READY: '+Number(out.availableAtomic)/1e6+
+        ' test USDC available on 0x4C7c...8Dcb. Live x402 price 0.01 test USDC, merchant 0xe383...e6. You must separately confirm once and sign EIP-712 in your wallet.');
+    }else{
+      freshMessage('NOT READY: '+(out.result==='V2_FRESH_PAYER_NEEDS_TEST_USDC'?
+        'Fund 0x4C7c...8Dcb with official Base Sepolia test USDC using the Circle faucet.':
+        'Exact price, merchant or chain did not pass. Do not pay.'));
+    }
+  }catch(error){
+    freshReady=false;freshMessage('Read-only check failed: '+String(error?.message||error).slice(0,180));
+  }finally{freshBusy=false;refreshFreshButtons();}
+});
+freshPayButton.addEventListener('click',async()=>{
+  if(freshBusy||!freshReady)return;
+  const approved=globalThis.confirm(
+    'Authorize EXACTLY ONE NEW testnet x402 purchase?\n'+
+    'Payer: 0x4C7cb73ac8f8999af21cfc9fF4cF2333a9508Dcb\n'+
+    'Network: Base Sepolia (84532)\nAmount: 0.01 TEST USDC\n'+
+    'Merchant: 0xe3837fe309618ae075dbef0a20735c0615a308e6\n'+
+    'This is a REAL signed payment authorization. No automatic retry. Continue?'
+  );
+  if(!approved)return;
+  freshBusy=true;freshReady=false;refreshFreshButtons();
+  freshMessage('Requesting wallet switch to Base Sepolia and ONE EIP-3009 signature. Any ambiguous payment remains permanently locked; do not retry.');
+  try{
+    const sdk=await getV2Sdk();
+    const out=await sdk.payV2X402Once();
+    if(out.result!=='PAYMENT_AND_BASE_USDC_VERIFIED_V2_CASE_PREPARED'||
+       out.packet?.status!=='PREPARED_NOT_FILED'||
+       out.packet?.settlement?.result!=='BASE_USDC_TRANSFER_VERIFIED'){
+      freshMessage('PAYMENT OUTCOME REQUIRES REVIEW: '+String(out.result||'UNKNOWN')+
+        (out.txHash?' · original Base TX '+out.txHash:'')+
+        '. Do not retry. Inspect the original payment and one-shot lock.');
+      return;
+    }
+    const p=out.packet;
+    for(const [name,value] of [
+      ['txHash',p.txHash],['asset',p.token],['network',p.network],
+      ['payer',p.payer],['payee',p.payee],['amountAtomic',p.amountAtomic],
+      ['endpoint',p.endpoint],['terms',p.terms],['delivery',p.delivery],['evidence',p.evidence]
+    ])form.elements.namedItem(name).value=value;
+    packet=p;updateV2PreparedPacket(p);setWorkflowStage(3);
+    $('case-id').textContent=p.caseId;
+    $('verdict').textContent='NOT FILED';
+    $('track-id').value=p.caseId;
+    $('track-version').value='v2';
+    $('copy-case').disabled=false;
+    $('read-verdict').disabled=true; // This is a V2 case, not historical V1.
+    display('TRANSFER VERIFIED','New x402 purchase verified — V2 case not filed',
+      'Base Sepolia TX '+out.paymentTx+' confirmed. Original API response metadata recorded. Switch back to GenLayer Studionet 61999, reconnect the SAME wallet and separately approve one File Case.','success');
+    // We just switched to Base Sepolia. Never leave a prior GenLayer SDK
+    // connection marked as sign-ready on a different chain.
+    v2Wallet=null;
+    $('v2-signer').textContent='Reconnect on Studionet 61999';
+    v2Controls();
+    freshMessage('NEW PAID TX: '+out.paymentTx+' · V2 case '+p.caseId+
+      ' · Base USDC verified. No GenLayer filing yet. Reconnect 0x4C7c...8Dcb on Studionet before filing.');
+  }catch(error){
+    v2Wallet=null;v2Controls();
+    freshMessage(String(error?.message||'Payment outcome uncertain').slice(0,255));
+  }finally{freshBusy=false;refreshFreshButtons();}
+});
+refreshFreshButtons();

@@ -31,7 +31,15 @@ async function sameOriginRead(url){
   let body;
   try{body=await response.json();}
   catch{throw Error('PAYJURY read service returned an invalid response. No wallet signature was requested.');}
-  if(!response.ok)throw Error(String(body.error||'GenLayer read unavailable').slice(0,180));
+  if(!response.ok){
+    const error=Error(String(body.error||'GenLayer read unavailable').slice(0,180));
+    // Only a recognized, server-confirmed read failure may trigger the
+    // narrow operator-reviewed testnet acceptance route in web/app.js.
+    if(body.code==='GENLAYER_RLP_255_READ_UNAVAILABLE'&&
+       body.filingStatus==='UNVERIFIED'&&body.readOnly===true)
+      error.code='GENLAYER_RLP_255_READ_UNAVAILABLE';
+    throw error;
+  }
   return body;
 }
 export async function connectGenLayerWallet(){

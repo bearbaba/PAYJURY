@@ -95,7 +95,7 @@ test('Base64 transport decoding can prove identical Python source bytes',()=>{
 });
 test('newline/BOM-only differences are classified but do not automatically authorize V2',async()=>{
   const local='from genlayer import *\nclass PayJuryV2: pass\n';
-  const deployed='\\ufefffrom genlayer import *\r\nclass PayJuryV2: pass\r\n\r\n';
+  const deployed='\ufefffrom genlayer import *\r\nclass PayJuryV2: pass\r\n\r\n';
   const diagnosed=compareV2Source(deployed,local);
   assert.equal(diagnosed.result,'SOURCE_FORMAT_ONLY_DIFFERENCE');
   assert.notEqual(diagnosed.deployedSha256,diagnosed.localSha256);

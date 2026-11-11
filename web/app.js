@@ -101,6 +101,11 @@ $('track-form').addEventListener('submit',async event=>{
       $('track-base-link').href='https://'+domain+'/tx/'+data.txHash;
       $('track-base-link').hidden=false;
     }
+    if(data.contractVersion!==version)throw Error('Contract version mismatch');
+    if(WALLET_ADDR.test(data.contractAddress||'')){
+      $('track-genlayer-link').href='https://explorer-studio.genlayer.com/address/'+data.contractAddress;
+      $('track-genlayer-link').textContent='View GenLayer '+version.toUpperCase()+' contract ↗';
+    }
     $('track-results').hidden=false;
     if(version==='v2')updateV2TrackedCase(data);
     const flags=[];

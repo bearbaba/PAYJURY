@@ -79,3 +79,16 @@ The verifier distinguishes `V2_DEPLOY_AND_AUTHORIZATION_FORMAT_ONLY_REVIEW_REQUI
 **Owner opt-in on Codespaces:** once the owner has reviewed this report and accepted controlled testnet wallet operation, set only `GENLAYER_V2_CONTRACT_ADDRESS=0x0a6171C6a580c58d999a251436CE7c63FFc3dc31` in local private `.env` (do not commit). Restart `npm run dev`. Before any GenLayer write, first open the site and verify the V2 marker and wallet connection without signing a transaction. The payer wallet must authorize each payment-scoped delegation, filing and adjudication separately. **Never submit the already-decided V1 case again**; reuse its public transaction only for read-only UI checks.
 
 A browser delegate preflight bug found in `web/app.js` was fixed: `can_file_for` now receives **four arguments** `[payer, network, txHash, delegate]`, matching the deployed V2 function; offline tests enforce this ABI. This is not yet live wallet acceptance.
+
+## Browser wallet connection fix — 11 Nov 2026
+
+Screenshot acceptance found PAYJURY V2 showing **"An unknown RPC error occurred"** immediately after **Connect GenLayer wallet**, without a wallet address or signed TX. Investigation found the site's Content Security Policy originally set `connect-src 'self'`, blocking direct GenLayer SDK browser RPC calls to `https://studio.genlayer.com/api`. This is a browser/RPC configuration defect, **not** an on-chain GenLayer transaction error. The screenshot alone cannot establish whether the first failure was CSP, CORS, or the wallet's network-change request.
+
+The website now uses two carefully separated paths:
+
+- **Read-only:** `GET /api/v2/read` permits only the configured deployed V2 address and allowlisted methods `version`, `can_file_for`, `filing_status`, and `get_case`, with strict argument shape/length/type validation. `GET /api/v2/tx` inspects one existing GenLayer transaction ID and returns status/GenVM execution, never rebroadcasts. The Node backend already had successful SDK GenLayer read access, so browser reads no longer depend on a cross-origin SDK call.
+- **Wallet-approved writes only:** EIP-1193 `eth_requestAccounts` grants access to an address. `eth_chainId` checks for **61999 / 0xf22f**. If already correct, the SDK does not make an unnecessary wallet network switch request; otherwise it calls `client.connect('studionet')` and validates the chain afterward. **Only** the wallet-provider-backed browser SDK can submit `file_case`, `set_delegate`, and `adjudicate_case`, and only after each separate user confirmation. The server exposes **NO write endpoints** or payment/fee endpoints.
+
+CSP remains tightly scoped: `connect-src 'self' https://studio.genlayer.com` (no wildcard origins). RPC and wallet errors are displayed with the failing stage, instead of unqualified `An unknown RPC error occurred`.
+
+**Acceptance after updating Codespaces:** `git pull --ff-only`; stop and restart `npm run dev` to rebuild `web/studio-wallet.bundle.js`; hard-refresh page; press **Connect GenLayer wallet**. Successful read preflight plus approved account/chain must display `Connected 0x... on GenLayer Studionet`. If network add/switch fails, inspect the stage-specific error, do not supply or expose seed/private keys. No V2 case TX or new payment is necessary for this acceptance step.

@@ -331,16 +331,20 @@ fetch('/api/status').then(r=>r.json()).then(data=>{
 });
 $('v2-connect').addEventListener('click',async()=>{
   $('v2-connect').disabled=true;
+  v2Wallet=null;
   try{
+    v2Message('Step 1/2 · Checking V2 contract identity through PAYJURY read-only service. No wallet signature.');
     const sdk=await getV2Sdk();
     await requireGenuineV2Interface(sdk);
+    v2Message('Step 2/2 · Contract confirmed. Requesting wallet account and checking Studionet 61999 (no transaction).');
     const address=await sdk.connectGenLayerWallet();
     v2Wallet=address;
     $('v2-signer').textContent=address;
-    v2Message('Connected '+address+' on GenLayer Studionet. Before filing, the contract will independently verify signer authorization.');
+    v2Message('Connected '+address+' on GenLayer Studionet 61999. No transaction was sent. Filing still requires exact payer authorization and separate confirmation.');
   }catch(error){
     v2Wallet=null;
-    v2Message(String(error?.shortMessage||error?.message||'Wallet unavailable').slice(0,200));
+    v2Message('Connection not completed: '+String(error?.shortMessage||error?.message||'Wallet unavailable').slice(0,230)+
+      ' No transaction was submitted.');
   }finally{v2Controls();}
 });
 $('v2-file').addEventListener('click',async()=>{

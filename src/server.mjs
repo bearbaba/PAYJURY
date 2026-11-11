@@ -118,7 +118,7 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
       respond(res,404,{error:'Not found'});
     } catch(error){
       const safe=String(error?.message||'Validation error').slice(0,170);
-      const known=/^(Invalid|Only|Payment|Transaction|Matching|Unsupported|HTTPS|x402|RPC |Malformed|Request |Expected|Unparseable)/.test(safe);
+      const known=/^(Invalid|Only|Payment|Transaction|Matching|Ambiguous|Unsupported|HTTPS|x402|RPC |Malformed|Request |Expected|Unparseable)/.test(safe);
       respond(res,known?422:503,{error:known?safe:'Verification unavailable; do not assume payment or verdict success.'});
     }
   });

@@ -19,7 +19,7 @@ const v2Reads=async ({address,functionName,args})=>{
 test('V2 deployed TX, version marker, payer allowed, unrelated wallet denied, optional source match',async()=>{
   const out=await verifyV2ReadOnly({
     getTransaction:async()=>expectedTx,readContract:v2Reads,
-    getContractCode:async()=> 'contract V2 source',
+    getContractCode:async address=>{assert.equal(address,V2_ADDRESS);return 'contract V2 source';},
     localSource:'contract V2 source'
   });
   assert.equal(out.result,'V2_DEPLOY_AND_AUTHORIZATION_READBACK_PASS');
@@ -44,7 +44,7 @@ test('read-only deploy inspection never treats version mismatch or stranger auth
 test('RPC code-read error cannot be misreported as source match',async()=>{
   const out=await verifyV2ReadOnly({
     getTransaction:async()=>expectedTx,readContract:v2Reads,
-    getContractCode:async()=>{throw Error('GenLayer RPC -32603');},
+    getContractCode:async address=>{assert.equal(address,V2_ADDRESS);throw Error('GenLayer RPC -32603');},
     localSource:'different source'
   });
   assert.equal(out.result,'V2_DEPLOY_AND_AUTHORIZATION_READBACK_PASS');
@@ -55,7 +55,7 @@ test('RPC code-read error cannot be misreported as source match',async()=>{
 test('declared source mismatches block readiness',async()=>{
   const out=await verifyV2ReadOnly({
     getTransaction:async()=>expectedTx,readContract:v2Reads,
-    getContractCode:async()=> 'unrelated source',
+    getContractCode:async address=>{assert.equal(address,V2_ADDRESS);return 'unrelated source';},
     localSource:'contract V2 source'
   });
   assert.equal(out.result,'V2_NOT_READY_FOR_SIGNING');

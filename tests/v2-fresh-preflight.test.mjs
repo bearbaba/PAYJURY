@@ -9,7 +9,7 @@ const QUOTE={status:'X402_QUOTE_INSPECTED_NOT_PAID',options:[{
 function mockRpc(balance,chain='0x14a34'){
   const calls=[];
   const fetchImpl=async(url,opts)=>{
-    assert.equal(url,'https://sepolia.base.org');
+    assert.equal(url,'https://sepolia.base.org/');
     const req=JSON.parse(opts.body);
     calls.push(req);
     return {ok:true,json:async()=>({

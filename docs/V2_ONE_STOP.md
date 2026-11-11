@@ -65,3 +65,17 @@ The owner ran `v2:verify` after the SDK fix. Deployed bytes were **11,361**, loc
 The improved comparer now removes **only** an optional UTF-8 BOM, CRLF versus LF line-ending conventions and terminal newline-only differences for a separate normalized comparison. It also prints `localNewlines`, `deployedNewlines`, and `normalizedSha256` alongside the deployed normalized hash. If the hashes agree while raw hashes differ, the source content matches within these narrowly specified formatting differences. It **does not** change the original raw source hashes or automatically enable V2 signing; the result remains `SOURCE_FORMAT_ONLY_DIFFERENCE` / `V2_NOT_READY_FOR_SIGNING` pending manual source review. Any changed Python code, indentation, inline whitespace, or internal blank line remains a real mismatch.
 
 Read-only next step: `git pull --ff-only && npm run v2:verify`. Preserve V2 deployment TX `0x1fd845e9574e6c0956d5fd03afac8c7c70e75ea6532d4095fae3aa1276045f98`. Do not redeploy or repeat the existing x402 payment merely to troubleshoot line endings.
+
+## Verified source-content review: 11 Nov 2026
+
+The owner observed a strict normalized SHA-256 match between local `contracts/PayJuryV2.py` and the deployed GenLayer source:
+
+`fed2f075824c0a0dd1e6c8e6b431a9b29e4d1a28a675de07699ad3566f1bdfd2`
+
+There were zero changed Python content lines. The raw byte difference was precisely 246 CRLF separators vs 247 LF separators (one terminal newline present only locally), yielding the measured 245-byte size delta. The live contract also returned the correct V2 version marker, `can_file_for(payer)=true` and `can_file_for(unapproved_stranger)=false`, and its original deployment is FINALIZED / GenVM SUCCESS. The SDK still does **not** demonstrate byte-for-byte equivalence of original source; this is **content equivalence under strictly defined newline normalization**.
+
+The verifier distinguishes `V2_DEPLOY_AND_AUTHORIZATION_FORMAT_ONLY_REVIEW_REQUIRED` from a genuine mismatch and from a read failure. This state is evidence for an owner-reviewed, **controlled Studionet acceptance test**, not an automatic permission to submit transactions, an external audit, or proof of cross-chain Base verification inside GenLayer.
+
+**Owner opt-in on Codespaces:** once the owner has reviewed this report and accepted controlled testnet wallet operation, set only `GENLAYER_V2_CONTRACT_ADDRESS=0x0a6171C6a580c58d999a251436CE7c63FFc3dc31` in local private `.env` (do not commit). Restart `npm run dev`. Before any GenLayer write, first open the site and verify the V2 marker and wallet connection without signing a transaction. The payer wallet must authorize each payment-scoped delegation, filing and adjudication separately. **Never submit the already-decided V1 case again**; reuse its public transaction only for read-only UI checks.
+
+A browser delegate preflight bug found in `web/app.js` was fixed: `can_file_for` now receives **four arguments** `[payer, network, txHash, delegate]`, matching the deployed V2 function; offline tests enforce this ABI. This is not yet live wallet acceptance.

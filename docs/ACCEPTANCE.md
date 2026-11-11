@@ -52,3 +52,9 @@
 - Preserve the original payment marker. Do not retry the same paid request or either completed GenLayer write just to improve a demo.
 
 [Original case receipt, exact fields and historical runbook](FIRST_PAID_CASE.md) · [Threat model](SECURITY.md) · [x402 client safety](X402_LIVE_CLIENT.md).
+
+## Next upgrade: PAYJURY V2 authorization & one-stop UI
+
+The repository now includes `contracts/PayJuryV2.py` with payer-only direct filing or payer-signed, revocable delegate authorization. It recomputes case IDs from canonical fields and permits at most one case per referenced transfer **within V2**. It also adds a guarded EIP-1193 wallet workflow to the same website, disabled until a verified V2 contract address exists. Offline security tests are not evidence of V2 deployment or successful wallet writes.
+
+**V2 live acceptance is NOT complete.** Verify actual deploy/GenVM result, authorize/deauthorize from the payer account, reject an unauthorized signer, file exactly one new legitimate case, then check persisted verdict readback. Do not reuse the completed V1 payment or do speculative x402 signing. [Acceptance runbook](V2_ONE_STOP.md).

@@ -3,6 +3,7 @@
 // authorize any payment, file a case, or adjudicate it.
 import {createClient,createAccount} from 'genlayer-js';
 import {studionet} from 'genlayer-js/chains';
+import {safelyReadV2FilingStatusRaw} from '../src/v2-raw-read.mjs';
 
 export const REFERENCE=Object.freeze({
   contract:'0x0a6171C6a580c58d999a251436CE7c63FFc3dc31',
@@ -100,7 +101,32 @@ if(import.meta.url===new URL('file://'+process.argv[1]).href){
         transactionHashVariant:variant
       })
     });
+    result.rawRlpWorkaround=null;
+    const filing=result.results.find(x=>x.method==='filing_status');
+    const rlp=filing?.error?.levels?.some(x=>
+      /RLP string ends with [0-9]+ superfluous bytes/i.test(x.message||''));
+    if(result.status==='FILING_STATUS_UNVERIFIED'&&rlp){
+      const p=REFERENCE;
+      try{
+        const value=await safelyReadV2FilingStatusRaw(client,{
+          address,functionName:'filing_status',
+          args:[p.caseId,p.network,p.txHash,p.asset,p.payer,p.payee,p.amount,p.payer]
+        },{
+          authoritativeReader:req=>client.readContract({...req,
+            transactionHashVariant:'latest-final'})
+        });
+        result.rawRlpWorkaround={status:'READ_OK_LIVE_CROSSCHECKED',
+          method:'filing_status',snapshot:'latest-final',
+          result:value,readOnly:true,accountKeyUsed:false,
+          comment:'Original V2 contract read via unwrapped calldata after matching version and can_file_for against the regular GenLayer SDK.'};
+      }catch(error){
+        result.rawRlpWorkaround={status:'READ_ERROR',
+          error:classifyReadError(error),readOnly:true};
+      }
+    }
     console.log('PAYJURY_V2_READ_DIAGNOSTIC',JSON.stringify(result,null,2));
-    if(result.status!=='READY_REQUIRES_BASE_PROOF')process.exitCode=2;
+    if(result.status!=='READY_REQUIRES_BASE_PROOF'&&
+       result.rawRlpWorkaround?.result!=='READY_REQUIRES_BASE_PROOF')
+      process.exitCode=2;
   }
 }

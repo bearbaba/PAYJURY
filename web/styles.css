@@ -139,3 +139,12 @@ body{overflow-x:clip}
   .tracker-form label:first-child,.tracker-form label:nth-child(2){flex:1 1 100%;min-width:0}
   .tracker-form button{flex:1 1 100%;width:100%}
 }
+
+.v2-fresh-checkout{border:1px solid #48624a;border-radius:12px;padding:20px;margin:12px 0 27px;background:#18271e85}
+.v2-fresh-checkout .new-payment-top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.v2-fresh-checkout p{color:#afc7b7;font-size:12px;line-height:1.65;margin:12px 0}
+.v2-fresh-checkout .v2-buttons{display:flex;gap:10px;flex-wrap:wrap}
+.v2-fresh-checkout .v2-buttons button{background:#253727;color:#d5edcc;border:1px solid #607554;padding:10px 13px;border-radius:8px;cursor:pointer}
+.v2-fresh-checkout .v2-buttons button:disabled{opacity:.4;cursor:not-allowed}
+.v2-fresh-checkout #v2-pay-once:not(:disabled){background:var(--lime);color:#11201a;font-weight:750}
+.v2-fresh-checkout #v2-pay-status{overflow-wrap:anywhere}

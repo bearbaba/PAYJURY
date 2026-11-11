@@ -45,7 +45,16 @@
       <div class="work-grid">
         <form class="case-form panel" id="case-form">
           <div class="panel-top"><div><div class="mini-label">STEP 01 · PROVE THE TRANSFER</div><h3>Payment evidence</h3></div><span class="tag">Read only</span></div>
-          <p class="muted">Paste a Base transaction and detect its USDC Transfer. We independently check the token, sender, recipient, amount and confirmations.</p>
+          <p class="muted">Use an existing verified Base payment, or make one new x402 testnet purchase from the same wallet that will sign the V2 case.</p>
+          <div class="v2-fresh-checkout">
+            <div class="new-payment-top"><strong>New x402 test purchase</strong><span class="tag">0.01 test USDC · Base Sepolia</span></div>
+            <p>One EIP-3009 signature from GenLayer V2 payer <code>0x4C7c...8Dcb</code>. Exact merchant locked, no private key or server-controlled payment. Only approve after reviewing the live quote and test USDC balance.</p>
+            <div class="v2-buttons">
+              <button type="button" id="v2-pay-quote">Check 402 quote &amp; wallet balance</button>
+              <button type="button" id="v2-pay-once" disabled>Confirm one x402 purchase</button>
+            </div>
+            <p id="v2-pay-status" role="status" aria-live="polite">No new payment has been signed or sent. Complete the read-only quote check first.</p>
+          </div>
           <div class="fields two payment-start">
             <label>Network<select name="network" id="network"><option value="eip155:84532">Base Sepolia · Testnet</option><option value="eip155:8453">Base · Mainnet</option></select></label>
             <label>Base transaction hash<input name="txHash" placeholder="0x… confirmed Base transaction" required maxlength="66" spellcheck="false" autocomplete="off"></label>

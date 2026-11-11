@@ -2,6 +2,11 @@
 // Uses the user's EIP-1193 extension. No secrets or server-held signer.
 import {createClient} from 'genlayer-js';
 import {studionet} from 'genlayer-js/chains';
+import {x402Client} from '@x402/core/client';
+import {ExactEvmScheme} from '@x402/evm/exact/client';
+import {wrapFetchWithPayment} from '@x402/fetch';
+import {createWalletClient,custom} from 'viem';
+import {baseSepolia} from 'viem/chains';
 
 const ADDRESS=/^0x[0-9a-f]{40}$/i;
 const TX=/^0x[0-9a-f]{64}$/i;
@@ -82,6 +87,9 @@ export async function sendV2Write(address,fn,args){
   const active=await provider.request({method:'eth_accounts'});
   if(!Array.isArray(active)||String(active[0]||'').toLowerCase()!==writeAddress)
     throw Error('Wallet changed. Reconnect before signing');
+  const network=String(await provider.request({method:'eth_chainId'})).toLowerCase();
+  if(network!==STUDIO_CHAIN_ID)
+    throw Error('Wallet is not on GenLayer Studionet 61999. Reconnect GenLayer wallet; never sign on Base Sepolia.');
   const write={address,functionName:fn,args};
   // No arbitrary fees or unstated transfers. Estimate actual network fees.
   const estimate=await writeClient.estimateTransactionFeesForWrite(write);
@@ -98,4 +106,95 @@ export async function checkV2Transaction(hash){
     throw Error('GenLayer transaction lookup hash mismatch; never retry the write.');
   return {hash,status:body.status,execution:body.execution,
     finalized:body.finalized===true,success:body.success===true};
+}
+
+/**
+ * Single testnet x402 purchase from EXACTLY the EOA that is authorized to
+ * file directly in PAYJURY V2. EIP-712 signing happens in the user's wallet.
+ * Payment is relayed by the same-origin server under a permanent one-shot lock.
+ * No private key, account secret or general payment allowance is requested.
+ */
+const V2_TEST_PAYER='0x4c7cb73ac8f8999af21cfc9ff4cf2333a9508dcb';
+const BASE_TEST_CHAIN='0x14a34'; // 84532
+const TEST_USDC='0x036cbd53842c5426634e7929541ec2318f3dcf7e';
+const EXACT_MERCHANT='0xe3837fe309618ae075dbef0a20735c0615a308e6';
+const PURCHASE_LOCK='payjury:v2:one-paid-x402:'+V2_TEST_PAYER;
+
+async function enforceBaseSepolia(provider){
+  let chain=String(await provider.request({method:'eth_chainId'})).toLowerCase();
+  if(chain===BASE_TEST_CHAIN)return;
+  try{
+    await provider.request({method:'wallet_switchEthereumChain',params:[{chainId:BASE_TEST_CHAIN}]});
+  }catch(error){
+    if(error?.code!==4902&&error?.cause?.code!==4902)throw explainWalletError('Switch to Base Sepolia testnet',error);
+    await provider.request({method:'wallet_addEthereumChain',params:[{
+      chainId:BASE_TEST_CHAIN,chainName:'Base Sepolia',
+      nativeCurrency:{name:'Ether',symbol:'ETH',decimals:18},
+      rpcUrls:['https://sepolia.base.org'],
+      blockExplorerUrls:['https://sepolia.basescan.org']
+    }]});
+    await provider.request({method:'wallet_switchEthereumChain',params:[{chainId:BASE_TEST_CHAIN}]});
+  }
+  chain=String(await provider.request({method:'eth_chainId'})).toLowerCase();
+  if(chain!==BASE_TEST_CHAIN)throw Error('Wallet did not switch to Base Sepolia; no payment authorized');
+}
+export async function payV2X402Once(){
+  const provider=globalThis.window?.ethereum;
+  if(!provider?.request)throw Error('Wallet extension unavailable; cannot initiate a testnet purchase');
+  const connected=await provider.request({method:'eth_requestAccounts'});
+  const account=String(connected?.[0]||'').toLowerCase();
+  if(account!==V2_TEST_PAYER)
+    throw Error('Selected Base payer differs from GenLayer V2 claimant. Select 0x4C7c...8Dcb before signing.');
+  const locked=globalThis.localStorage?.getItem(PURCHASE_LOCK);
+  if(locked)throw Error('A one-shot x402 payment attempt is already recorded locally. Do not repeat or clear it; check the original transaction.');
+  await enforceBaseSepolia(provider);
+  const wallet=createWalletClient({
+    account:V2_TEST_PAYER,chain:baseSepolia,transport:custom(provider)
+  });
+  const signer={
+    address:V2_TEST_PAYER,
+    signTypedData:params=>wallet.signTypedData({...params,account:V2_TEST_PAYER})
+  };
+  const client=new x402Client();
+  client.register('eip155:*',new ExactEvmScheme(signer));
+  client.registerPolicy((version,requirements)=>{
+    if(version!==2||!Array.isArray(requirements))return [];
+    return requirements.filter(r=>r?.scheme==='exact'&&r?.network==='eip155:84532'&&
+      String(r?.asset||'').toLowerCase()===TEST_USDC&&
+      String(r?.payTo||'').toLowerCase()===EXACT_MERCHANT&&
+      r?.amount==='10000'&&[undefined,'eip3009'].includes(r?.extra?.assetTransferMethod));
+  });
+  const paidFetch=wrapFetchWithPayment(fetch,client);
+  if(!globalThis.localStorage)throw Error('One-shot local payment lock storage unavailable; payment blocked');
+  // Persist a lock BEFORE any wallet signature. An unknown outcome must stay locked.
+  globalThis.localStorage.setItem(PURCHASE_LOCK,JSON.stringify({
+    state:'ATTEMPTED_UNKNOWN',at:new Date().toISOString(),
+    network:'eip155:84532',amountAtomic:'10000',
+    payer:V2_TEST_PAYER,merchant:EXACT_MERCHANT
+  }));
+  try{
+    const response=await paidFetch('/api/v2/x402/execute',{method:'GET',
+      headers:{accept:'application/json'},redirect:'error'});
+    const result=await response.json();
+    if(response.ok&&result.result==='PAYMENT_AND_BASE_USDC_VERIFIED_V2_CASE_PREPARED'&&
+       result.packet?.payer===V2_TEST_PAYER&&result.packet?.settlement?.result==='BASE_USDC_TRANSFER_VERIFIED'){
+      globalThis.localStorage.setItem(PURCHASE_LOCK,JSON.stringify({
+        state:'PAID_AND_VERIFIED',txHash:result.paymentTx,caseId:result.caseId,
+        at:new Date().toISOString()
+      }));
+    }else if(typeof result.txHash==='string'&&TX.test(result.txHash)){
+      globalThis.localStorage.setItem(PURCHASE_LOCK,JSON.stringify({
+        state:'PAYMENT_OUTCOME_REQUIRES_REVIEW',txHash:result.txHash,at:new Date().toISOString()
+      }));
+    }
+    return result;
+  }catch(error){
+    const rejected=error?.code===4001||error?.cause?.code===4001||
+      /user rejected|user denied|user cancelled/i.test(String(error?.shortMessage||error?.message||''));
+    if(rejected)globalThis.localStorage.removeItem(PURCHASE_LOCK);
+    throw Error(rejected?
+      'Wallet declined EIP-3009 signing. No payment authorized; you can review the quote again.':
+      'Outcome uncertain after payment attempt: '+String(error?.shortMessage||error?.message||'unknown').slice(0,125)+
+        '. Keep the one-shot lock; do not retry. Check provider and Base transaction first.');
+  }
 }

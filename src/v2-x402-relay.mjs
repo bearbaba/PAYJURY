@@ -83,7 +83,7 @@ async function verifiedQuotedHeader(fetchImpl){
 export async function serveV2X402({
   req,res,rpcUrl,fetchImpl=fetch,
   ready=checkV2FreshPaymentReadiness,verify=verifyBaseUSDCTransfer,
-  lockDir=process.cwd()
+  lockDir=process.cwd(),lockStore=null
 }){
   if(req.method!=='GET')return json(res,405,{error:'Only GET is supported'});
   if(!rpcUrl)return json(res,503,{error:'Base Sepolia RPC missing; no payment made'});
@@ -118,19 +118,33 @@ export async function serveV2X402({
     return json(res,503,{error:'Fresh quote, sender or test USDC balance not verified; no signed request forwarded'});
   }
   const lockPath=join(lockDir,lockName);
-  let lock;
-  try{
-    lock=await open(lockPath,'wx',0o600);
-    await lock.writeFile(JSON.stringify({
-      state:'OUTCOME_UNKNOWN',timestamp:new Date().toISOString(),
-      signer:PAYER,endpoint:PROPOSED_PAID_ENDPOINT,
-      amountAtomic:EXPECTED_ATOMIC,envelopeSha256:validated.envelopeSha256
-    })+'\n');
-    await lock.close();
-  }catch{
-    if(lock)try{await lock.close();}catch{}
-    return json(res,409,{result:'EXISTING_PAYMENT_ATTEMPT_LOCKED',
-      error:'One-shot payment attempt already exists. Inspect its original TX; never retry or remove the lock automatically.'});
+  if(lockStore){
+    // Never forward the signed authorization unless a global atomic lock
+    // has been confirmed by durable storage. An ambiguous lock error
+    // permanently stops this request; no upstream payment is attempted.
+    let reserved;
+    try{reserved=await lockStore.reserve(validated);}
+    catch{
+      return json(res,503,{result:'DURABLE_LOCK_UNVERIFIED',paymentExecuted:false,
+        error:'Durable one-shot lock unavailable. Payment NOT forwarded. Do not retry a prior signed request.'});
+    }
+    if(!reserved)return json(res,409,{result:'EXISTING_PAYMENT_ATTEMPT_LOCKED',
+      error:'This demo session already attempted its one permitted purchase. Never retry or reset it.'});
+  }else{
+    let lock;
+    try{
+      lock=await open(lockPath,'wx',0o600);
+      await lock.writeFile(JSON.stringify({
+        state:'OUTCOME_UNKNOWN',timestamp:new Date().toISOString(),
+        signer:PAYER,endpoint:PROPOSED_PAID_ENDPOINT,
+        amountAtomic:EXPECTED_ATOMIC,envelopeSha256:validated.envelopeSha256
+      })+'\n');
+      await lock.close();
+    }catch{
+      if(lock)try{await lock.close();}catch{}
+      return json(res,409,{result:'EXISTING_PAYMENT_ATTEMPT_LOCKED',
+        error:'One-shot payment attempt already exists. Inspect its original TX; never retry or remove the lock automatically.'});
+    }
   }
   let upstream;
   try{
@@ -157,11 +171,13 @@ export async function serveV2X402({
     if(payload?.payer&&String(payload.payer).toLowerCase()!==PAYER)
       throw Error('Provider payer mismatch');
     reportedTx=txHash;
-    await writeFile(lockPath,JSON.stringify({
+    const intermediate={
       state:'REPORTED_SETTLEMENT_NOT_YET_INDEPENDENTLY_VERIFIED',
       timestamp:new Date().toISOString(),payer:PAYER,txHash,
       httpStatus:upstream.status,envelopeSha256:validated.envelopeSha256
-    })+'\n',{mode:0o600});
+    };
+    if(lockStore)await lockStore.record(intermediate);
+    else await writeFile(lockPath,JSON.stringify(intermediate)+'\n',{mode:0o600});
   }catch{
     return json(res,202,{result:'PAYMENT_OUTCOME_UNKNOWN',
       httpStatus:upstream.status,paymentAttempted:true,
@@ -217,13 +233,20 @@ export async function serveV2X402({
     confirmations:proof.confirmations,block:proof.blockNumber,
     genlayerFileCaseSubmitted:false,genlayerDecisionSubmitted:false
   };
-  await mkdir(join(lockDir,'out'),{recursive:true});
-  try{
-    const file=await open(join(lockDir,'out','v2-new-'+reportedTx.slice(2)+'.json'),'wx',0o600);
-    try{await file.writeFile(JSON.stringify(record,null,2)+'\n');}finally{await file.close();}
-  }catch{/* A preexisting local record must never cause a second payment. */}
-  try{await writeFile(lockPath,JSON.stringify({...record,state:'BASE_PAYMENT_VERIFIED'})+'\n',{mode:0o600});}
-  catch{/* Payment is already confirmed; keep original lock. */}
+  if(lockStore){
+    // This writes public receipt metadata only. The immutable SET NX lock
+    // remains present regardless of outcome-write availability.
+    try{await lockStore.record({...record,state:'BASE_PAYMENT_VERIFIED'});}
+    catch{/* Payment already happened; never retry it due to record failure. */}
+  }else{
+    await mkdir(join(lockDir,'out'),{recursive:true});
+    try{
+      const file=await open(join(lockDir,'out','v2-new-'+reportedTx.slice(2)+'.json'),'wx',0o600);
+      try{await file.writeFile(JSON.stringify(record,null,2)+'\n');}finally{await file.close();}
+    }catch{/* A preexisting local record must never cause a second payment. */}
+    try{await writeFile(lockPath,JSON.stringify({...record,state:'BASE_PAYMENT_VERIFIED'})+'\n',{mode:0o600});}
+    catch{/* Payment is already confirmed; keep original lock. */}
+  }
   return json(res,200,{...record,packet,
     note:'REAL new Base Sepolia USDC transfer verified. V2 case is prepared NOT FILED. Connect same EOA on GenLayer Studionet and separately approve one file_case. No verdict exists yet.'});
 }

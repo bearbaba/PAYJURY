@@ -36,3 +36,30 @@ GenLayer wallet signing, if ever used by an eligible case owner, remains separat
 6. End screen PAYJURY | x402 | GenLayer. No payment, filing, adjudication or wallet popups in the recording.
 
 Before claiming launch success, verify public URL HTTP 200, /api/status hostedReadOnly=true, /api/case v2 returns live state, desktop/mobile rendering, and /api/v2/x402/execute is rejected.
+
+## Optional new one-take V2 live payment (separate from completed V2 case)
+
+The production overview continues to display the original `DECIDED / ACCEPT` case and should be treated as historical evidence. A new live payment is a separate transaction/case and is **never** automatically signed or replayed.
+
+PAYJURY now has an *opt-in* Vercel checkout gate. It will not open until all of the following have been configured in the `payjury` Vercel project:
+
+- `UPSTASH_REDIS_REST_URL` — HTTPS REST endpoint of an independently provisioned Upstash Redis database
+- `UPSTASH_REDIS_REST_TOKEN` — the standard write-capable REST token, Vercel **server-side encrypted/sensitive variable only**, never pasted into chat or exposed in browser bundles
+- `PAYJURY_NEW_CHECKOUT_ENABLED=1` — explicit release switch; DO NOT add until Redis readiness and CI gates pass
+
+Upstash must be **durable**, not the 72-hour anonymous scratch database. PAYJURY creates one permanent Redis reservation via atomic `SET key record NX`, with **no expiry**. The signed payment is not forwarded unless the store confirms that reservation. Reservation timeouts and uncertain outcomes remain locked. A separate key stores only nonsecret receipt metadata.
+
+The one additional demo session uses the same testnet payer wallet as the earlier accepted case, but a distinct browser/Redis lock `payjury-v2-web-one-take-20261111`; the old payment case and lock are never reset. Only 0.01 **test USDC** at the exact approved merchant/endpoint is allowed.
+
+### Operator acceptance gates
+
+1. Before enabling, CI tests PASS and `GET /api/status` reports `newPaymentEnabled:false`; hosted x402 execute is denied.
+2. Configure a **dedicated** Upstash Redis database connected to `payjury` (do not mix with Veyra), and add its server-side variables to Vercel.
+3. Enable the switch only after verifying readiness; `GET /api/status` should show `newPaymentEnabled:true`.
+4. Read-only `GET /api/v2/x402/session` must return `locked:false` and the expected session ID before wallet action.
+5. In Workspace, check the exact quote, payer balance and sign **one** EIP-3009 payment in MetaMask. The browser and Redis permanently lock this attempt. Never try again if the response is unclear.
+6. Verify original Base TX/USDC receipt; after a successful packet, the SAME wallet connects GenLayer Studionet 61999, signs one File Case, then one Request AI Decision. Only claim `DECIDED` after verified contract readback.
+7. Recheck session status: `locked:true`; duplicate signed execute must fail with a lock error, not result in another paid request.
+8. Record the full **real** workflow as a source video (which may take longer than the 45-second submission limit). Edit it to the official maximum without faking signing, processing time or finality.
+
+**Blocked environment note:** Vercel Blob store creation was rejected by the account's usage threshold. A pre-existing Upstash Vercel integration was discovered, but a dedicated live Redis database and its env bindings have not been provisioned. Until they exist, checkout is deliberately disabled; the already verified overview remains available.

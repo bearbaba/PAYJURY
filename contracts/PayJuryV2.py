@@ -61,37 +61,49 @@ class PayJuryV2(gl.Contract):
     def __init__(self):
         pass
 
-    def _delegate_key(self, payer: str, delegate: str) -> str:
-        return _address(payer) + "|" + _address(delegate)
+    def _payment_ref(self, network: str, tx_hash: str) -> str:
+        if network not in ("eip155:84532", "eip155:8453"):
+            raise gl.vm.UserError("Unsupported payment network")
+        if not isinstance(tx_hash, str) or len(tx_hash) != 66 or (
+            not tx_hash.startswith("0x")
+        ) or any(ch not in "0123456789abcdefABCDEF" for ch in tx_hash[2:]):
+            raise gl.vm.UserError("Invalid tx hash")
+        return network + "|" + tx_hash.lower()
 
-    def _transfer_key(self, network: str, tx_hash: str, asset: str,
-                      payer: str, payee: str, amount_atomic: str) -> str:
-        # This is intentionally independent of mutable delivery/evidence fields.
-        return "|".join([network, tx_hash, asset, payer, payee, amount_atomic])
+    def _delegate_key(self, payer: str, network: str,
+                      tx_hash: str, delegate: str) -> str:
+        # Least privilege: one payer, one Base chain, one tx, one delegate.
+        return (_address(payer) + "|" + self._payment_ref(network, tx_hash)
+                + "|" + _address(delegate))
 
-    def _authorized(self, payer: str, caller: str) -> bool:
+    def _authorized(self, payer: str, network: str,
+                    tx_hash: str, caller: str) -> bool:
         if caller == payer:
             return True
-        key = self._delegate_key(payer, caller)
+        key = self._delegate_key(payer, network, tx_hash, caller)
         return key in self.delegations and self.delegations[key] == "ENABLED"
 
     @gl.public.write
-    def set_delegate(self, delegate: str, enabled: bool):
+    def set_delegate(self, network: str, tx_hash: str,
+                     delegate: str, enabled: bool):
         payer = _address(str(gl.message.sender_address))
+        self._payment_ref(network, tx_hash)
         delegate = _address(delegate)
         if payer == delegate:
             raise gl.vm.UserError("Payer already has direct filing authority")
         if not isinstance(enabled, bool):
             raise gl.vm.UserError("enabled must be a boolean")
-        self.delegations[self._delegate_key(payer, delegate)] = (
+        self.delegations[self._delegate_key(payer, network, tx_hash, delegate)] = (
             "ENABLED" if enabled else "REVOKED"
         )
 
     @gl.public.view
-    def can_file_for(self, payer: str, submitter: str) -> bool:
+    def can_file_for(self, payer: str, network: str,
+                     tx_hash: str, submitter: str) -> bool:
         payer = _address(payer)
         submitter = _address(submitter)
-        return self._authorized(payer, submitter)
+        self._payment_ref(network, tx_hash)
+        return self._authorized(payer, network, tx_hash, submitter)
 
     @gl.public.view
     def filing_status(self, case_id: str, network: str, tx_hash: str,
@@ -102,11 +114,11 @@ class PayJuryV2(gl.Contract):
         asset = _address(asset)
         payee = _address(payee)
         tx_hash = tx_hash.lower()
-        if not self._authorized(payer, submitter):
+        if not self._authorized(payer, network, tx_hash, submitter):
             return "NOT_AUTHORIZED"
         if case_id in self.cases:
             return "CASE_EXISTS"
-        key = self._transfer_key(network, tx_hash, asset, payer, payee, amount_atomic)
+        key = self._payment_ref(network, tx_hash)
         if key in self.claimed_transfers:
             return "TRANSFER_ALREADY_FILED"
         return "READY_REQUIRES_BASE_PROOF"
@@ -141,11 +153,11 @@ class PayJuryV2(gl.Contract):
                                     payer, payee, endpoint, terms, delivery, evidence):
             raise gl.vm.UserError("Noncanonical case ID")
         caller = _address(str(gl.message.sender_address))
-        if not self._authorized(payer, caller):
+        if not self._authorized(payer, network, tx_hash, caller):
             raise gl.vm.UserError("Payer or authorized delegate required")
         if case_id in self.cases:
             raise gl.vm.UserError("Case exists; immutable filing")
-        transfer_key = self._transfer_key(network, tx_hash, asset, payer, payee, amount_atomic)
+        transfer_key = self._payment_ref(network, tx_hash)
         if transfer_key in self.claimed_transfers:
             raise gl.vm.UserError("This payment already has a case")
         self.cases[case_id] = PaymentCaseV2(

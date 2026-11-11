@@ -16,7 +16,8 @@
     "pay:testnet": "node --env-file-if-exists=.env scripts/pay-x402-testnet.mjs",
     "contract:verify": "node scripts/verify-genlayer-deployment.mjs",
     "deploy:inspect": "node scripts/inspect-deploy-tx.mjs",
-    "pay:preflight": "node --env-file-if-exists=.env scripts/preflight-x402-payer.mjs"
+    "pay:preflight": "node --env-file-if-exists=.env scripts/preflight-x402-payer.mjs",
+    "case:prepare": "node --env-file-if-exists=.env scripts/prepare-first-paid-case.mjs"
   },
   "dependencies": {
     "@x402/core": "2.30.0",

@@ -42,3 +42,18 @@ V2 does **not** bridge assets, escrow USDC, refund buyers or recover funds. No G
 See [live V1 acceptance ledger](ACCEPTANCE.md), [wallet/receipt security model](SECURITY.md), and [historical paid case](FIRST_PAID_CASE.md).
 
 **SDK source read correction (2026-11-11):** `genlayer-js@1.1.8` expects `getContractCode(contractAddress)` with a bare address string, not `{address: contractAddress}`. An earlier read-only inspection mistakenly wrapped the address in an object, producing `psycopg2.ProgrammingError: can't adapt type 'dict'` at `gen_getContractCode`. This is a verifier argument bug, **not** proof of a failed deployment. Re-run `npm run v2:verify` with the corrected script. Do not enable wallet writes if the deployed source is reported mismatched. A source read failure leaves source identity unverified; it does not justify redeployment.
+
+## Source-difference investigation (11 Nov 2026)
+
+After correcting the SDK call signature, the owner observed `sourceIdentity=SOURCE_TEXT_MISMATCH` on the already-finalized V2 contract while `version()` and payer-versus-stranger authorization passed. **Do not enable V2 signing or redeploy on this evidence alone.**
+
+The enhanced `npm run v2:verify` prints `sourceDiagnosis` with transport classification (plain Python versus a Base64 wrapper), local and deployed SHA-256, UTF-8 byte sizes, logical line counts, and the **first differing line** truncated to 130 characters. It reports `SOURCE_FORMAT_ONLY_DIFFERENCE` if only a BOM/newline convention/trailing blank lines differ; that also remains blocked until exact source is independently reviewed. True Python changes must be reviewed against the source actually uploaded to Studio. Source-code identity cannot be established from `version()` alone.
+
+**Next safe command (Codespaces; no payment, transaction or signature):**
+
+```bash
+git pull --ff-only
+npm run v2:verify
+```
+
+Inspect `sourceDiagnosis.firstDifferentLine`, `sourceDiagnosis.encoding`, `sourceDiagnosis.localSha256` and `sourceDiagnosis.deployedSha256` before deciding next action. Preserve the existing deployment and V1 acceptance evidence. Only enable wallet signing after exact deployed source and authorization checks have passed independent review. Do not edit the deployed V2 contract: any genuinely different code would need separately reviewed source and explicit user-authorized deployment of a new version.

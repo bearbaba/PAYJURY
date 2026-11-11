@@ -102,24 +102,25 @@ class AuthorizationTests(unittest.TestCase):
 
     def test_payer_delegation_revocation_no_false_authorization(self):
         FakeGL.message.sender_address=PAYER
-        self.ic.set_delegate(DELEGATE,True)
-        self.assertTrue(self.ic.can_file_for(PAYER,DELEGATE))
-        self.assertFalse(self.ic.can_file_for(PAYER,STRANGER))
+        self.ic.set_delegate(NETWORK,HASH,DELEGATE,True)
+        self.assertTrue(self.ic.can_file_for(PAYER,NETWORK,HASH,DELEGATE))
+        self.assertFalse(self.ic.can_file_for(PAYER,NETWORK,'0x'+'b'*64,DELEGATE))
+        self.assertFalse(self.ic.can_file_for(PAYER,NETWORK,HASH,STRANGER))
         FakeGL.message.sender_address=DELEGATE
         self.ic.file_case(**args())
         self.assertEqual(self.ic.cases[args()["case_id"]].claimant,DELEGATE)
         FakeGL.message.sender_address=PAYER
-        self.ic.set_delegate(DELEGATE,False)
-        self.assertFalse(self.ic.can_file_for(PAYER,DELEGATE))
+        self.ic.set_delegate(NETWORK,HASH,DELEGATE,False)
+        self.assertFalse(self.ic.can_file_for(PAYER,NETWORK,HASH,DELEGATE))
         FakeGL.message.sender_address=DELEGATE
         with self.assertRaisesRegex(MockVM.UserError,"Payer or authorized delegate"):
             self.ic.file_case(**args(tx_hash="0x"+"b"*64))
 
     def test_delegate_cannot_authorize_itself_for_another_payer(self):
         FakeGL.message.sender_address=STRANGER
-        self.ic.set_delegate(DELEGATE,True)
-        self.assertFalse(self.ic.can_file_for(PAYER,DELEGATE))
-        self.assertTrue(self.ic.can_file_for(STRANGER,DELEGATE))
+        self.ic.set_delegate(NETWORK,HASH,DELEGATE,True)
+        self.assertFalse(self.ic.can_file_for(PAYER,NETWORK,HASH,DELEGATE))
+        self.assertTrue(self.ic.can_file_for(STRANGER,NETWORK,HASH,DELEGATE))
 
     def test_altered_case_id_fails(self):
         FakeGL.message.sender_address=PAYER
@@ -127,6 +128,13 @@ class AuthorizationTests(unittest.TestCase):
         altered["case_id"]="pj_"+"f"*32
         with self.assertRaisesRegex(MockVM.UserError,"Noncanonical case ID"):
             self.ic.file_case(**altered)
+
+    def test_payment_tx_cannot_be_reused_with_modified_amount_or_recipient(self):
+        FakeGL.message.sender_address=PAYER
+        self.ic.file_case(**args())
+        for update in ({"amount_atomic":"9000"}, {"payee":"0x"+"9"*40}):
+            with self.assertRaisesRegex(MockVM.UserError,"payment already has a case"):
+                self.ic.file_case(**args(**update))
 
     def test_same_paid_transfer_cannot_be_reused_with_modified_evidence(self):
         FakeGL.message.sender_address=PAYER

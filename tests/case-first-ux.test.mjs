@@ -12,21 +12,32 @@ async function serve(callback){
     await new Promise((resolve,reject)=>server.close(err=>err?reject(err):resolve()));
   }
 }
-test('completed V2 proof precedes the optional new-case workflow and uses live reads',async()=>{
+test('user overview, manager workspace and presentation all show authentic live case',async()=>{
   await serve(async base=>{
     const html=await (await fetch(base+'/')).text();
     const js=await (await fetch(base+'/app.js')).text();
+    const css=await (await fetch(base+'/styles.css')).text();
     assert.ok(html.indexOf('id="case-tracker"')>0);
     assert.ok(html.indexOf('id="case-tracker"')<html.indexOf('id="workflow"'));
     assert.match(html,/href="#case-tracker">View verified V2 verdict/);
-    assert.match(html,/href="#workflow">Create a new case/);
-    assert.match(html,/href="#case-tracker">Live verdict/);
-    assert.match(html,/href="#workflow">New case/);
+    assert.match(html,/data-open-view="overview"/);
+    assert.match(html,/data-open-view="workspace"/);
+    assert.match(html,/data-open-view="demo"/);
+    assert.match(html,/body data-view="overview"/);
+    assert.match(html,/id="proof-timeline"/);
+    assert.match(html,/id="track-outcome"/);
+    assert.match(html,/id="track-export"/);
     assert.match(html,/id="track-version"/);
     assert.match(html,/value="pj_9f2276fd1904120b16d5f5b6ea5f7a2b"/);
+    assert.match(html,/id="deployment-message"/);
     assert.match(js,/queueMicrotask\(\(\)=>/);
     assert.match(js,/\$\('track-form'\)\.requestSubmit\(\)/);
-    assert.match(html,/id="deployment-message"/);
+    assert.match(js,/function openPayjuryView/);
+    assert.match(js,/function proofState/);
+    assert.match(js,/lastVerifiedTrack=null/);
+    assert.match(css,/body\[data-view=overview\] #workflow/);
+    assert.match(css,/body\[data-view=demo\] \.tracker-head/);
+    assert.match(css,/\.proof-timeline\{display:grid/);
   });
 });
 test('workflow has four accessible phases and no misleading permanent read-only claim',async()=>{

@@ -101,3 +101,13 @@ Only after verifying both source and deployment TX should you set `GENLAYER_CONT
 ### If deployment verification is unverified
 
 Run `npm run contract:verify` after pulling the latest main branch. The CLI prints a **sanitized** `PAYJURY_DEPLOYMENT_DIAGNOSTIC` with `errorCode`, optional numeric `httpStatus` and `rpcCode`. It never prints raw RPC response messages, credentials, transaction payloads or private data. `RPC_METHOD_UNSUPPORTED` means the requested method was unavailable; `RPC_HTTP_ERROR` means HTTP rejected the call; `RPC_REJECTED_FINALIZED_CODE_READ` means the RPC rejected the query (which may mean missing/unfinalized contract or other provider failure). No single such code proves the contract failed deployment. A confirmed code match still requires a real deployment transaction and GenVM receipt.
+
+## Operator-observed PAYJURY deployment — 11 Nov 2026
+
+The operator provided an [official Studionet Explorer deployment record](https://explorer-studio.genlayer.com/tx/0x2703920edd2a717344dddd1617c4ae7cddc6e5ed30aadb077c4ddb5c70bd399e): **Deploy / FINALIZED / GenVM SUCCESS / Consensus Accepted** for contract [`0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8`](https://explorer-studio.genlayer.com/address/0xd57a04c3Cc304ab30C9435a9AE34A840802f11C8). The first `gen_getContractCode` source inspection returned JSON-RPC internal error `-32603`, which is **not** a failed deployment verdict. Do not redeploy on the strength of that error.
+
+```bash
+npm run deploy:inspect
+```
+
+This new script reads the *existing deployment transaction only*, checks whether the SDK returns FINALIZED/GenVM success, compares any exposed recipient/address, and never signs. A failed lookup is not proof the Explorer is wrong. A deploy PASS **does not** establish that the deployed source exactly matches GitHub or that PAYJURY adjudication has completed. See [acceptance evidence](docs/ACCEPTANCE.md).

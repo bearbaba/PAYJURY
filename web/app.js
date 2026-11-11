@@ -291,22 +291,22 @@ async function v2Write(method,caseId,args,metadata=null){
   v2Busy=true;v2Controls();
   let writeAttempted=false;
   try{
-    // This is only a fee simulation, not a wallet signature or GenLayer
-    // transaction. On RPC errors no transaction lock should be created.
-    v2Message('Estimating '+method+' network fees (read-only). No wallet signature yet.');
-    const estimate=await sdk.estimateV2WriteFees(v2Address,method,args);
-    // Lock ONLY after successful fee preflight and BEFORE writeContract.
-    // If a hash never comes back, never assume the transaction failed.
+    // GenLayerJS 1.1.8 has no fee estimator. Check the exact wallet,
+    // Studionet chain and write capability before locking or signing.
+    v2Message('Checking '+method+' wallet, network and SDK compatibility. No transaction signed yet.');
+    const prepared=await sdk.preflightV2Write(v2Address,method,args);
+    // Lock only AFTER the unsigned preflight and BEFORE writeContract.
+    // A missing/invalid hash must never result in an automatic retry.
     writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN',delegation:metadata,when:new Date().toISOString()});
     writeAttempted=true;
-    const hash=await sdk.sendV2Write(v2Address,method,args,estimate);
+    const hash=await sdk.sendV2Write(v2Address,method,args,prepared);
     writeLock(caseId,method,{state:'SUBMITTED',hash,delegation:metadata,when:new Date().toISOString()});
     v2Message(method+' submitted: '+hash+'. Checking GenLayer finality without resending.');
     await monitorSubmitted(caseId,method,hash);
   }catch(error){
     if(!writeAttempted){
-      v2Message('Fee estimation failed BEFORE any wallet transaction or signature. No one-shot write lock was created. '+
-        String(error?.shortMessage||error?.message||'GenLayer fee quote unavailable').slice(0,160));
+      v2Message('Wallet / SDK preflight failed BEFORE any signature. No transaction or one-shot write lock was created. '+
+        String(error?.shortMessage||error?.message||'GenLayer preflight unavailable').slice(0,160));
       return;
     }
     const explicitlyRejected=error?.code===4001||

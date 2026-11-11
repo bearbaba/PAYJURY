@@ -53,3 +53,26 @@ test('missing version or invalid permission data remains blocked',async()=>{
   assert.equal(outcome.payerAuthorized,'UNKNOWN');
   assert.equal(outcome.results[0].status,'READ_ERROR');
 });
+
+test('nonfinal READY cannot bypass a failing finalized snapshot',async()=>{
+  const requests=[];
+  const out=await runReadDiagnosis({reader:async req=>{
+    requests.push(req);
+    if(req.method==='version')return 'PAYJURY_V2_PAYMENT_SCOPED_AUTH_V1';
+    if(req.method==='can_file_for')return true;
+    if(req.method==='filing_status'&&req.variant==='latest-final'){
+      throw Object.assign(new Error('RLP string ends with 331 superfluous bytes'),{code:-32603});
+    }
+    if(req.method==='filing_status'&&req.variant==='latest-nonfinal'){
+      return 'READY_REQUIRES_BASE_PROOF';
+    }
+    throw Object.assign(new Error('No case filed'),{code:-32000});
+  }});
+  assert.equal(out.status,'FILING_STATUS_UNVERIFIED');
+  assert.equal(out.readSnapshot,'LATEST_FINAL');
+  assert.equal(out.nonFinalProbe.status,'READ_OK_DIAGNOSTIC_ONLY');
+  assert.equal(out.nonFinalProbe.result,'READY_REQUIRES_BASE_PROOF');
+  assert.equal(out.noWrite,true);
+  assert.equal(requests.length,5);
+  assert.equal(requests[2].variant,'latest-final');
+});

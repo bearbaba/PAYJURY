@@ -55,9 +55,15 @@ async function genlayerReadClient(){
   // Never provide any server-side wallet account to writeContract.
   return createClient({chain:studionet,account:createAccount('0x'+'11'.repeat(32))});
 }
+// Security-sensitive PAYJURY case/permission reads must use finalized,
+// durable contract state. GenLayerJS otherwise defaults to LATEST_NONFINAL.
+export async function readV2Finalized(client,{address,functionName,args},variant='latest-final'){
+  if(variant!=='latest-final')throw Error('V2 finalized read requires latest-final');
+  return client.readContract({address,functionName,args,transactionHashVariant:variant});
+}
 async function v2DefaultReader({address,functionName,args}){
   const client=await genlayerReadClient();
-  return client.readContract({address,functionName,args});
+  return readV2Finalized(client,{address,functionName,args});
 }
 async function v2DefaultTxReader({hash}){
   const client=await genlayerReadClient();
@@ -85,7 +91,7 @@ async function readGenLayerCaseRecord(caseId, contractAddress=process.env.GENLAY
   // A deterministic, non-funded dummy account is used only to satisfy SDK reads.
   // Never permit a server-side signing key in this endpoint.
   const client=createClient({chain:studionet,account:createAccount('0x'+'11'.repeat(32))});
-  let data=await client.readContract({address,functionName:'get_case',args:[caseId]});
+  let data=await readV2Finalized(client,{address,functionName:'get_case',args:[caseId]});
   if(typeof data==='string')data=JSON.parse(data);
   if(data?.case_id!==caseId||!['FILED','DECIDED'].includes(data?.status))throw Error('GenLayer readback not verified');
   return data;

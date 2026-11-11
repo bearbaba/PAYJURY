@@ -2,7 +2,7 @@ import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {validateClaim,verifyBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from './payment.mjs';
+import {validateClaim,verifyBaseUSDCTransfer,inspectBaseUSDCTransfer,decodeX402PaymentResponse,makeCasePacket} from './payment.mjs';
 import {trackFiledCase} from './case-tracker.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
@@ -62,6 +62,13 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,port=4173,
           genlayerV2ContractAddress:v2Configured(v2)?v2:null,
           v2FilingEnabled:v2Configured(v2),
           acceptsPayments:false,signsGenLayerWrites:false});return;
+      }
+      if(req.method==='GET'&&url.pathname==='/api/inspect'){
+        if(!rpcUrl){respond(res,503,{error:'BASE_RPC_URL not configured; inspection unavailable'});return;}
+        const network=url.searchParams.get('network')||'';
+        const txHash=url.searchParams.get('txHash')||'';
+        const found=await inspectBaseUSDCTransfer({network,txHash},{rpcUrl});
+        respond(res,200,found);return;
       }
       if(req.method==='POST'&&url.pathname==='/api/verify'){
         const body=await jsonBody(req);

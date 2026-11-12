@@ -1,10 +1,11 @@
+// One approved freshly paid V2 testnet case; older decided cases are not reusable.
 // Explicit single-case fallback when GenLayer Studio #1745 breaks the
 // read-only filing_status ABI. NOT a proof that a transfer is unclaimed.
 // On-chain PayJuryV2.file_case STILL validates immutable case ID,
 // payer authorization, duplicate case and duplicate payment reference.
 export const KNOWN_RLP_READ_CODE='GENLAYER_RLP_255_READ_UNAVAILABLE';
-const CASE='pj_9f2276fd1904120b16d5f5b6ea5f7a2b';
-const TX='0x6edc3d9a0589f22e55ca4f348bc021df70b5644b437fef054099391fae798ae2';
+const CASE='pj_6575f7352b41602401caf317ce30f86b';
+const TX='0x8f90716a44d142be61d042929b4f7fd588711deb805a3e25df7128254f5f24bd';
 const PAYER='0x4c7cb73ac8f8999af21cfc9ff4cf2333a9508dcb';
 const PAYEE='0xe3837fe309618ae075dbef0a20735c0615a308e6';
 const TOKEN='0x036cbd53842c5426634e7929541ec2318f3dcf7e';

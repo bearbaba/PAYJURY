@@ -731,15 +731,26 @@ $('v2-adjudicate-recovery').addEventListener('click',async()=>{
     const sdk=await getV2Sdk();
     await requireGenuineV2Interface(sdk);
     const [txResponse,caseResponse]=await Promise.all([
-      fetch('/api/v2/tx-consensus?hash='+FIRST_AI_ATTEMPT,{cache:'no-store'}),
+      fetch('/api/v2/tx?hash='+FIRST_AI_ATTEMPT,{cache:'no-store'}),
       fetch('/api/case?version=v2&caseId='+encodeURIComponent(p.caseId),{cache:'no-store'})
     ]);
     if(!txResponse.ok||!caseResponse.ok)throw Error('Read-only consensus or case lookup unavailable');
     const [tx,caseData]=await Promise.all([txResponse.json(),caseResponse.json()]);
-    if(tx.hash!==FIRST_AI_ATTEMPT||tx.finalized!==true||tx.readOnly!==true||
-       tx.originalPayer!==p.payer||tx.contract!==v2Address.toLowerCase()||
-       tx.consensusResult!=='NO_MAJORITY')
-      throw Error('Original AI attempt not independently confirmed as FINALIZED / NO_MAJORITY');
+    if(tx.hash!==FIRST_AI_ATTEMPT||tx.status!=='FINALIZED'||tx.finalized!==true||
+       tx.consensusConflict===true||tx.consensusResult==='MAJORITY_AGREE')
+      throw Error('Original AI transaction has not been independently confirmed as finalized and unreconciled');
+    // The older Studio SDK omits consensus result. The owner must verify
+    // this EXACT hash on Explorer; typed text does not replace chain proof.
+    if(tx.consensusResult!=='NO_MAJORITY'){
+      if(tx.consensusResult!=='UNKNOWN')
+        throw Error('Original consensus result is not eligible for recovery');
+      const entered=globalThis.prompt(
+        'Open https://explorer-studio.genlayer.com/tx/'+FIRST_AI_ATTEMPT+
+        '\\nVerify method adjudicate_case and Consensus Result Undetermined.\\n'+
+        'Then type UNDETERMINED exactly. This is a MANUAL confirmation, not independent consensus verification.');
+      if(entered!=='UNDETERMINED')
+        throw Error('Explorer consensus not manually confirmed; no signature');
+    }
     if(caseData.caseId!==p.caseId||caseData.caseStatus!=='FILED'||
        caseData.verdict!=='PENDING'||caseData.contractVersion!=='v2'||
        caseData.contractAddress?.toLowerCase()!==v2Address.toLowerCase()||
@@ -758,7 +769,7 @@ $('v2-adjudicate-recovery').addEventListener('click',async()=>{
       throw Error('Signed attempt history changed; no recovery permitted');
     const approved=globalThis.confirm(
       'Submit ONE MORE GenLayer adjudicate_case for existing case '+p.caseId+'?\\n'+
-      'Original AI TX: '+FIRST_AI_ATTEMPT+' (FINALIZED / NO_MAJORITY).\\n'+
+      'Original AI TX: '+FIRST_AI_ATTEMPT+' (FINALIZED; Explorer consensus checked).\\n'+
       'Case remains FILED / PENDING. This will NOT charge USDC or re-file the case.\\n'+
       'A NEW signed GenLayer transaction MAY CONSUME GEN fees and MAY AGAIN FAIL consensus.\\n'+
       'Only one additional attempt is permitted; do not retry unknown outcomes. Sign once?'

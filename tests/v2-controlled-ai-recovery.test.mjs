@@ -6,7 +6,7 @@ test('Extra adjudication is pinned to one case and old TX with fresh consensus a
   const s=await app();
   assert.match(s,/const SECOND_AI_CASE='pj_6575f7352b41602401caf317ce30f86b'/);
   assert.match(s,/const FIRST_AI_ATTEMPT='0x1104d521fd6ad7e5bd38254034bb93ca303dd3ac9097150ea9792f21b1b30510'/);
-  assert.match(s,/tx\\.status!=='FINALIZED'/);
+  assert.match(s,/tx\.status!=='FINALIZED'/);
   assert.match(s,/entered!=='UNDETERMINED'/);
   assert.match(s,/caseData\.caseStatus!=='FILED'/);
   assert.match(s,/caseData\.verdict!=='PENDING'/);

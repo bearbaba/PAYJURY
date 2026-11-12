@@ -133,12 +133,33 @@ $('v2-import-verify').addEventListener('click',async()=>{
     $('track-id').value=checked.caseId;
     $('track-version').value='v2';
     $('case-id').textContent=checked.caseId;
-    $('verdict').textContent='NOT FILED';
+    // The packet is a local immutable claim; it is NOT the source of
+    // truth for an existing on-chain case. Do not imply NOT FILED.
+    $('verdict').textContent='NOT CHECKED';
     $('copy-case').disabled=false;
     $('read-verdict').disabled=true;
-    display('TRANSFER VERIFIED','Original paid case restored — not filed',
-      'Independent Base receipt and deterministic case identity verified again. No payment or GenLayer transaction was submitted.','success');
-    message.textContent='RESTORED: '+checked.caseId+'. Connect the SAME payer wallet on Studionet 61999; review filing preflight before any write.';
+    display('TRANSFER VERIFIED','Paid packet restored — checking GenLayer status',
+      'Base receipt independently verified. Checking whether this exact case was already filed or decided, read-only.','success');
+    message.textContent='RESTORED: '+checked.caseId+'. Checking existing V2 contract state without payment or signature.';
+    try{
+      const existing=await fetch('/api/case?version=v2&caseId='+encodeURIComponent(checked.caseId),
+        {method:'GET',cache:'no-store'});
+      if(!existing.ok)throw Error('V2 case not currently readable');
+      const onChain=await existing.json();
+      if(!syncCurrentV2WorkflowReadback(onChain))
+        throw Error('V2 case binding not independently confirmed');
+      updateV2TrackedCase(onChain);
+      message.textContent='RESTORED & READ BACK: '+checked.caseId+' · '+onChain.caseStatus+
+        (onChain.caseStatus==='DECIDED'?' / '+onChain.verdict:'')+
+        '. No wallet transaction sent.';
+    }catch{
+      // A read outage or not-yet-filed case is NOT evidence that nothing
+      // exists on chain. Leave signing decisions to their own preflight.
+      message.textContent='RESTORED: '+checked.caseId+
+        '. Base proof verified; current GenLayer case state is NOT CHECKED. Use the V2 case tracker read-only.';
+      display('TRANSFER VERIFIED','Paid packet restored — GenLayer status unverified',
+        'No on-chain filing or verdict is inferred from an imported packet. Track the case before any wallet action.','success');
+    }
   }catch(error){
     message.textContent='Recovery blocked: '+String(error?.message||'Invalid saved packet').slice(0,160)+
       '. Never repeat the x402 payment.';
@@ -391,8 +412,39 @@ function updateV2PreparedPacket(next){
   }
   v2Controls();
 }
+// Current Workflow is a readback view, never a claim that an imported
+// PREPARED_NOT_FILED packet still reflects the existing V2 chain state.
+// Only show filed/decided if identity, contract and independent Base proof match.
+function syncCurrentV2WorkflowReadback(data){
+  const p=verifiedPacket;
+  if(!p||data?.caseId!==p.caseId||data.contractVersion!=='v2'||
+     data.contractAddress?.toLowerCase()!=='0x0a6171c6a580c58d999a251436ce7c63ffc3dc31'||
+     (v2Address&&data.contractAddress?.toLowerCase()!==v2Address.toLowerCase())||
+     data.identityBinding!=='DETERMINISTIC_ID_MATCHED'||
+     data.settlement?.status!=='BASE_USDC_TRANSFER_VERIFIED'||
+     data.txHash!==p.txHash||data.network!==p.network||
+     data.payer!==p.payer||data.payee!==p.payee||
+     data.amountAtomic!==p.amountAtomic||
+     !['FILED','DECIDED'].includes(data.caseStatus))
+    return false;
+  if(data.caseStatus==='DECIDED'&&
+     (!['ACCEPT','REWORK','UNVERIFIABLE'].includes(data.verdict)||
+      typeof data.reason!=='string'||!data.reason.trim()))return false;
+  if(data.caseStatus==='FILED'&&data.verdict!=='PENDING')return false;
+  $('case-id').textContent=data.caseId;
+  $('verdict').textContent=data.caseStatus==='DECIDED'?data.verdict:'PENDING';
+  display(data.caseStatus==='DECIDED'?'DECIDED':'FILED',
+    data.caseStatus==='DECIDED'?'AI verdict recorded on GenLayer V2':'Case filed on GenLayer V2',
+    data.caseStatus==='DECIDED'?
+      'V2 contract readback: '+data.verdict+'. '+data.reason+
+        ' Base Sepolia USDC settlement independently checked.':
+      'V2 contract contains the case but AI decision remains pending. Base USDC transfer independently checked.',
+    'success');
+  return true;
+}
 function updateV2TrackedCase(data){
   trackedCaseV2=data;
+  syncCurrentV2WorkflowReadback(data);
   setWorkflowStage(data.caseStatus==='FILED'||data.caseStatus==='DECIDED'?4:3);
   if(v2Address&&data.caseStatus==='FILED'){
     v2Message('V2 case is FILED. The claimant or payer can request a GenLayer AI decision.');

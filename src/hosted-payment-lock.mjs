@@ -7,19 +7,32 @@ export const LIVE_PAYMENT_SESSION='payjury-v2-web-one-take-20261111';
 const HOST_SUFFIX='.upstash.io';
 const TIMEOUT_MS=10_000;
 
-export function validUpstashConfig(env=process.env){
+// The Vercel Marketplace integration injects KV_REST_API_*; directly
+// provisioned Upstash databases commonly use UPSTASH_REDIS_REST_*.
+// Never mix URL/token across pairs, or fall back if an explicit pair is
+// partially present but invalid. Unknown credentials must fail closed.
+function endpointConfigOrNull(env){
+  const explicit=Object.hasOwn(env,'UPSTASH_REDIS_REST_URL')||
+    Object.hasOwn(env,'UPSTASH_REDIS_REST_TOKEN');
+  const rawUrl=explicit?env.UPSTASH_REDIS_REST_URL:env.KV_REST_API_URL;
+  const token=explicit?env.UPSTASH_REDIS_REST_TOKEN:env.KV_REST_API_TOKEN;
   try{
-    const u=new URL(String(env.UPSTASH_REDIS_REST_URL||''));
-    return u.protocol==='https:'&&(u.hostname.endsWith(HOST_SUFFIX))&&
-      Boolean(u.hostname)&&!u.username&&!u.password&&!u.search&&!u.hash&&
-      typeof env.UPSTASH_REDIS_REST_TOKEN==='string'&&env.UPSTASH_REDIS_REST_TOKEN.length>=20;
-  }catch{return false;}
+    const u=new URL(String(rawUrl||''));
+    if(u.protocol!=='https:'||!u.hostname.endsWith(HOST_SUFFIX)||
+       u.pathname!=='/'||u.username||u.password||u.search||u.hash||
+       typeof token!=='string'||token.length<20)return null;
+    return {url:u.origin,token};
+  }catch{return null;}
+}
+
+export function validUpstashConfig(env=process.env){
+  return endpointConfigOrNull(env)!==null;
 }
 
 function endpointConfig(env){
-  if(!validUpstashConfig(env))throw Error('Durable one-shot payment store not configured');
-  const u=new URL(env.UPSTASH_REDIS_REST_URL);
-  return {url:u.origin,token:env.UPSTASH_REDIS_REST_TOKEN};
+  const config=endpointConfigOrNull(env);
+  if(!config)throw Error('Durable one-shot payment store not configured');
+  return config;
 }
 
 export function createHostedOneShotLock({

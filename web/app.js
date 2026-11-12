@@ -437,6 +437,12 @@ async function refreshRecordedTransaction(caseId,method,hash){
       v2Message('Original GenLayer decision reached NO_MAJORITY: no verdict was stored. Review the existing case and the guarded recovery option; do not repeat the old TX.');
       return false;
     }
+    if(state.consensusResult==='UNKNOWN'){
+      v2Message('GenLayer receipt lacks validator consensus. Checking finalized contract state READ ONLY; never resubmitting automatically.');
+      if(method==='file_case'||method==='adjudicate_case')
+        return refreshV2Readback(caseId,method,{executionUnverified:true});
+      return false;
+    }
     // SDK v1.1.8 Studio getTransaction can omit top-level execution metadata.
     // FINALIZED / UNKNOWN does NOT mean the contract reverted.
     if(state.execution==='UNKNOWN'||state.executionConflict===true){
@@ -496,8 +502,8 @@ async function refreshV2Readback(caseId,method,{executionUnverified=false}={}){
     $('track-id').value=caseId;
     if(executionUnverified){
       v2Message(result.caseStatus==='DECIDED'?
-        'V2 DECIDED confirmed by independent contract readback. Original TX execution metadata remains unavailable. Verdict '+result.verdict+'.':
-        'V2 FILED confirmed by independent GenLayer contract readback and Base USDC receipt. Original TX execution metadata remains unavailable; preserve its hash.');
+        'V2 DECIDED confirmed by independent contract readback. Original TX consensus was not exposed by Studio SDK. Verdict '+result.verdict+'.':
+        'V2 FILED confirmed by independent GenLayer contract readback and Base USDC receipt. Original TX consensus was not exposed by Studio SDK; preserve its hash.');
     }else{
       v2Message(result.caseStatus==='DECIDED'?
         'AI verdict confirmed from V2: '+result.verdict+'. No more signing required.':

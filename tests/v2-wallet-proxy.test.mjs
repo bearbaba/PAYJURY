@@ -112,7 +112,7 @@ test('transaction finality readback is server-side and never retransmits',async(
     const missing=await fetch(base+'/api/v2/tx?hash=invalid');
     assert.equal(missing.status,422);
   },undefined,async({hash})=>{assert.equal(hash,TX);reads++;return {
-    hash,statusName:'FINALIZED',txExecutionResultName:'FINISHED_WITH_RETURN'
+    hash,statusName:'FINALIZED',txExecutionResultName:'FINISHED_WITH_RETURN',result:1
   };});
   assert.equal(reads,1);
 });

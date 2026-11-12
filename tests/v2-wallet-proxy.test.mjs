@@ -9,7 +9,7 @@ const ANOTHER='0x'+'2'.repeat(40);
 const TX='0x'+'a'.repeat(64);
 const CASE='pj_'+'b'.repeat(32);
 async function serve(testFn,read=async()=>true,tx=async()=>({
-  hash:TX,statusName:'FINALIZED',txExecutionResultName:'FINISHED_WITH_RETURN'
+  hash:TX,statusName:'FINALIZED',txExecutionResultName:'FINISHED_WITH_RETURN',result:1
 })){
   const previous=process.env.GENLAYER_V2_CONTRACT_ADDRESS;
   process.env.GENLAYER_V2_CONTRACT_ADDRESS=V2;
@@ -112,7 +112,7 @@ test('transaction finality readback is server-side and never retransmits',async(
     const missing=await fetch(base+'/api/v2/tx?hash=invalid');
     assert.equal(missing.status,422);
   },undefined,async({hash})=>{assert.equal(hash,TX);reads++;return {
-    hash,statusName:'FINALIZED',txExecutionResultName:'FINISHED_WITH_RETURN'
+    hash,statusName:'FINALIZED',txExecutionResultName:'FINISHED_WITH_RETURN',result:1
   };});
   assert.equal(reads,1);
 });

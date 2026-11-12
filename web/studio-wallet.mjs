@@ -136,7 +136,9 @@ export async function checkV2Transaction(hash){
     finalized:body.finalized===true,success:body.success===true,
     executionKnown:body.executionKnown===true,
     executionConflict:body.executionConflict===true,
-    executionSource:body.executionSource||'NOT_REPORTED'};
+    executionSource:body.executionSource||'NOT_REPORTED',
+    consensusResult:body.consensusResult||'UNKNOWN',
+    consensusKnown:body.consensusKnown===true};
 }
 
 /**

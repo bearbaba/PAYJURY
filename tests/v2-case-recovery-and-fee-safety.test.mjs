@@ -96,7 +96,7 @@ test('V2 wallet uses REAL genlayer-js 1.1.8 supported writer, never unsupported 
   const start=app.indexOf('async function v2Write(');
   const source=app.slice(start,app.indexOf("fetch('/api/status')",start));
   const preflightAt=source.indexOf('sdk.preflightV2Write(');
-  const lockAt=source.indexOf("writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN'");
+  const lockAt=source.indexOf("writeLock(caseId,lockMethod,{state:'ATTEMPTED_UNKNOWN'");
   const writeAt=source.indexOf('sdk.sendV2Write(');
   assert.ok(preflightAt>=0&&lockAt>preflightAt&&writeAt>lockAt);
   assert.match(app,/\/api\/v2\/resume-known/);

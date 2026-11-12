@@ -107,5 +107,5 @@ test('browser file_case flow keeps single signed lock and secondary payer rights
   assert.match(text,/assessV2FilingPreflight/);
   assert.match(text,/if\(!policy.allow\)/);
   assert.match(text,/v2Write\('file_case',p.caseId/);
-  assert.match(text,/writeLock\(caseId,method,\{state:'ATTEMPTED_UNKNOWN'/);
+  assert.match(text,/writeLock\(caseId,lockMethod,\{state:'ATTEMPTED_UNKNOWN'/);
 });

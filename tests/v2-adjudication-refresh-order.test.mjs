@@ -15,7 +15,7 @@ test('Existing signed AI decision disables a second adjudicate prompt',async()=>
   assert.match(app,/signedLock\(trackedCaseV2\.caseId,'adjudicate_case'\)/);
   assert.match(app,/\$\('v2-adjudicate'\)\.disabled=!signed\|\|!pending\|\|attemptedDecision/);
   assert.match(app,/const existing=signedLock\(caseId,method\);/);
-  assert.match(app,/if\(existing\)throw Error\(/);
+  assert.match(app,/if\(targetLock\)throw Error\(/);
 });
 
 test('Refresh remains read-only and never retries payment or signs a TX',async()=>{

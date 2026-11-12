@@ -15,6 +15,20 @@ function executionCode(value){
   if(value===2||value==='2')return 'FINISHED_WITH_ERROR';
   return null;
 }
+function resultName(value){
+  const name=toKey(value);
+  if(name==='NO_MAJORITY'||name==='NOMAJORITY'||name==='UNDETERMINED')return 'NO_MAJORITY';
+  if(name==='MAJORITY_AGREE'||name==='MAJORITYAGREE')return 'MAJORITY_AGREE';
+  if(name==='MAJORITY_DISAGREE'||name==='MAJORITYDISAGREE')return 'MAJORITY_DISAGREE';
+  return null;
+}
+function resultCode(value){
+  if(typeof value==='bigint')value=Number(value);
+  if(value===1||value==='1')return 'MAJORITY_AGREE';
+  if(value===2||value==='2')return 'MAJORITY_DISAGREE';
+  if(value===5||value==='5')return 'NO_MAJORITY';
+  return null;
+}
 export function summarizeV2ReadOnlyTx(tx,hash){
   const status=toKey(tx?.statusName)||toKey(tx?.status)||'UNKNOWN';
   const leader=tx?.consensus_data?.leader_receipt;
@@ -30,13 +44,29 @@ export function summarizeV2ReadOnlyTx(tx,hash){
   const conflict=unique.length>1;
   const execution=unique.length===1?unique[0]:'UNKNOWN';
   const finalized=status==='FINALIZED';
+  const consensusEntries=[
+    {source:'resultName',value:resultName(tx?.resultName)},
+    {source:'result',value:resultCode(tx?.result)}
+  ].filter(entry=>entry.value!==null);
+  const consensusSet=[...new Set(consensusEntries.map(entry=>entry.value))];
+  const consensusConflict=consensusSet.length>1;
+  const consensusResult=consensusSet.length===1?consensusSet[0]:'UNKNOWN';
   return {
     hash,status,execution,finalized,
+    consensusResult,consensusKnown:consensusResult!=='UNKNOWN',
+    consensusConflict,consensusSource:consensusEntries.map(entry=>entry.source).join(',')||'NOT_REPORTED',
     executionKnown:execution!=='UNKNOWN',
     executionConflict:conflict,
     executionSource:conflict?'CONFLICTING_RECEIPTS':entries.map(e=>e.source).join(',')||'NOT_REPORTED',
-    success:finalized&&execution==='FINISHED_WITH_RETURN',
-    note:conflict?
+    success:finalized&&!conflict&&!consensusConflict&&
+      consensusResult==='MAJORITY_AGREE'&&execution==='FINISHED_WITH_RETURN',
+    note:consensusResult==='UNKNOWN'?
+      'Studio SDK lacks validator consensus. Leader execution alone is not evidence of consensus acceptance; inspect Explorer and contract state before a wallet action.':
+      consensusResult==='NO_MAJORITY'?
+      'Validator consensus did not reach a majority; leader execution is not a persisted verdict. Confirm contract state before any separate, explicitly approved recovery.':
+      consensusConflict?
+      'Consensus fields contradict; no success may be inferred. Do not sign again without verification.':
+      conflict?
       'GenLayer execution receipt sources contradict. No success may be inferred. Preserve original TX and inspect Explorer.':
       execution==='UNKNOWN'?
         'GenLayer execution result not exposed by current SDK/RPC. FINALIZED is not evidence of successful execution. Preserve original TX and verify on-chain case state.':

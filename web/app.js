@@ -321,6 +321,9 @@ queueMicrotask(()=>{
 
 
 /* Signed GenLayer V2 filing is strictly opt-in; V1 history never signs. */
+const SECOND_AI_CASE='pj_6575f7352b41602401caf317ce30f86b';
+const SECOND_AI_PAYMENT='0x8f90716a44d142be61d042929b4f7fd588711deb805a3e25df7128254f5f24bd';
+const FIRST_AI_ATTEMPT='0x1104d521fd6ad7e5bd38254034bb93ca303dd3ac9097150ea9792f21b1b30510';
 const V1_HISTORIC_TX='0x2f5380bad9c06f4d9884f95774b75d8bbc0b6e37a0e2c80c3b4516ef0bbef4d5';
 const WALLET_ADDR=/^0x[0-9a-f]{40}$/i;
 let v2Address=null,v2Wallet=null,v2Sdk=null,verifiedPacket=null,
@@ -346,11 +349,22 @@ function v2Controls(){
   const attemptedDecision=Boolean(trackedCaseV2?.caseId&&
     signedLock(trackedCaseV2.caseId,'adjudicate_case'));
   $('v2-adjudicate').disabled=!signed||!pending||attemptedDecision;
+  const p=verifiedPacket;
+  const prior=p?.caseId===SECOND_AI_CASE&&signedLock(p.caseId,'adjudicate_case');
+  const second=p?.caseId===SECOND_AI_CASE&&signedLock(p.caseId,'adjudicate_case_recovery');
+  // Recovery is never offered without the original local signed history.
+  const canRecover=signed&&p?.caseId===SECOND_AI_CASE&&
+    p.txHash===SECOND_AI_PAYMENT&&
+    p.settlement?.result==='BASE_USDC_TRANSFER_VERIFIED'&&
+    v2Wallet.toLowerCase()===p.payer.toLowerCase()&&
+    prior?.hash?.toLowerCase()===FIRST_AI_ATTEMPT&&!second;
+  $('v2-adjudicate-recovery').disabled=!canRecover;
   const currentCase=trackedCaseV2?.caseId||verifiedPacket?.caseId;
   const delegate=$('v2-delegate').value.trim().toLowerCase();
   const delegationKey=verifiedPacket&&WALLET_ADDR.test(delegate)?
     verifiedPacket.payer.toLowerCase()+':'+verifiedPacket.network+':'+verifiedPacket.txHash+':delegate:'+delegate:null;
   $('v2-resume').disabled=!signed||!(
+    (currentCase&&signedLock(currentCase,'adjudicate_case_recovery')?.hash)||
     (currentCase&&signedLock(currentCase,'file_case')?.hash)||
     (currentCase&&signedLock(currentCase,'adjudicate_case')?.hash)||
     (delegationKey&&signedLock(delegationKey,'set_delegate')?.hash)
@@ -419,6 +433,16 @@ async function refreshRecordedTransaction(caseId,method,hash){
     return false;
   }
   if(!state.success){
+    if(state.consensusResult==='NO_MAJORITY'){
+      v2Message('Original GenLayer decision reached NO_MAJORITY: no verdict was stored. Review the existing case and the guarded recovery option; do not repeat the old TX.');
+      return false;
+    }
+    if(state.consensusResult==='UNKNOWN'){
+      v2Message('GenLayer receipt lacks validator consensus. Checking finalized contract state READ ONLY; never resubmitting automatically.');
+      if(method==='file_case'||method==='adjudicate_case')
+        return refreshV2Readback(caseId,method,{executionUnverified:true});
+      return false;
+    }
     // SDK v1.1.8 Studio getTransaction can omit top-level execution metadata.
     // FINALIZED / UNKNOWN does NOT mean the contract reverted.
     if(state.execution==='UNKNOWN'||state.executionConflict===true){
@@ -478,8 +502,8 @@ async function refreshV2Readback(caseId,method,{executionUnverified=false}={}){
     $('track-id').value=caseId;
     if(executionUnverified){
       v2Message(result.caseStatus==='DECIDED'?
-        'V2 DECIDED confirmed by independent contract readback. Original TX execution metadata remains unavailable. Verdict '+result.verdict+'.':
-        'V2 FILED confirmed by independent GenLayer contract readback and Base USDC receipt. Original TX execution metadata remains unavailable; preserve its hash.');
+        'V2 DECIDED confirmed by independent contract readback. Original TX consensus was not exposed by Studio SDK. Verdict '+result.verdict+'.':
+        'V2 FILED confirmed by independent GenLayer contract readback and Base USDC receipt. Original TX consensus was not exposed by Studio SDK; preserve its hash.');
     }else{
       v2Message(result.caseStatus==='DECIDED'?
         'AI verdict confirmed from V2: '+result.verdict+'. No more signing required.':
@@ -504,10 +528,11 @@ async function monitorSubmitted(caseId,method,hash){
     if(step<11)await new Promise(resolve=>setTimeout(resolve,2500));
   }
 }
-async function v2Write(method,caseId,args,metadata=null){
+async function v2Write(method,caseId,args,metadata=null,lockMethod=method){
   if(!v2Address||!v2Wallet||v2Busy)throw Error('V2 contract and connected wallet required');
   const existing=signedLock(caseId,method);
-  if(existing)throw Error(existing.hash?
+  const targetLock=lockMethod===method?existing:signedLock(caseId,lockMethod);
+  if(targetLock)throw Error(targetLock.hash?
     'This action already has a TX: '+existing.hash+'. Use Refresh recorded TX; do not sign again.':
     'An earlier write attempt has an unknown outcome. Review wallet activity before any resubmission.');
   const sdk=await getV2Sdk();
@@ -520,10 +545,10 @@ async function v2Write(method,caseId,args,metadata=null){
     const prepared=await sdk.preflightV2Write(v2Address,method,args);
     // Lock only AFTER the unsigned preflight and BEFORE writeContract.
     // A missing/invalid hash must never result in an automatic retry.
-    writeLock(caseId,method,{state:'ATTEMPTED_UNKNOWN',delegation:metadata,when:new Date().toISOString()});
+    writeLock(caseId,lockMethod,{state:'ATTEMPTED_UNKNOWN',delegation:metadata,when:new Date().toISOString()});
     writeAttempted=true;
     const hash=await sdk.sendV2Write(v2Address,method,args,prepared);
-    writeLock(caseId,method,{state:'SUBMITTED',hash,delegation:metadata,when:new Date().toISOString()});
+    writeLock(caseId,lockMethod,{state:'SUBMITTED',hash,delegation:metadata,when:new Date().toISOString()});
     v2Message(method+' submitted: '+hash+'. Checking GenLayer finality without resending.');
     await monitorSubmitted(caseId,method,hash);
   }catch(error){
@@ -537,7 +562,7 @@ async function v2Write(method,caseId,args,metadata=null){
       /user rejected|user denied|user cancelled/i.test(String(error?.shortMessage||error?.message||''));
     if(explicitlyRejected){
       // Explicit user rejection means the wallet did not authorize broadcast.
-      globalThis.localStorage.removeItem(lockKey(caseId,method));
+      globalThis.localStorage.removeItem(lockKey(caseId,lockMethod));
       v2Message('Wallet rejected the signing request. No new GenLayer transaction was authorized.');
     }else{
       v2Message('Signing/confirmation outcome uncertain: '+
@@ -695,10 +720,82 @@ $('v2-adjudicate').addEventListener('click',async()=>{
     await v2Write('adjudicate_case',data.caseId,[data.caseId]);
   }catch(error){v2Message(String(error?.message||'AI request unavailable').slice(0,200));}
 });
+// One extra wallet-approved GenLayer attempt. The prior adjudicate_case lock
+// and the x402 payment lock remain intact. No automatic retry or fee estimate.
+$('v2-adjudicate-recovery').addEventListener('click',async()=>{
+  const p=verifiedPacket;
+  if(!p||p.caseId!==SECOND_AI_CASE||p.txHash!==SECOND_AI_PAYMENT||
+     !v2Wallet||!v2Address||v2Busy||v2Wallet.toLowerCase()!==p.payer.toLowerCase())return;
+  const original=signedLock(p.caseId,'adjudicate_case');
+  if(original?.hash?.toLowerCase()!==FIRST_AI_ATTEMPT||
+     signedLock(p.caseId,'adjudicate_case_recovery')){
+    v2Message('Original decision record missing or a recovery already attempted. No signing.');return;
+  }
+  $('v2-adjudicate-recovery').disabled=true;
+  v2Message('Checking original consensus and current contract state READ ONLY. No signature.');
+  try{
+    const sdk=await getV2Sdk();
+    await requireGenuineV2Interface(sdk);
+    const [txResponse,caseResponse]=await Promise.all([
+      fetch('/api/v2/tx?hash='+FIRST_AI_ATTEMPT,{cache:'no-store'}),
+      fetch('/api/case?version=v2&caseId='+encodeURIComponent(p.caseId),{cache:'no-store'})
+    ]);
+    if(!txResponse.ok||!caseResponse.ok)throw Error('Read-only consensus or case lookup unavailable');
+    const [tx,caseData]=await Promise.all([txResponse.json(),caseResponse.json()]);
+    if(tx.hash!==FIRST_AI_ATTEMPT||tx.status!=='FINALIZED'||tx.finalized!==true||
+       tx.consensusConflict===true||tx.consensusResult==='MAJORITY_AGREE')
+      throw Error('Original AI transaction has not been independently confirmed as finalized and unreconciled');
+    // The older Studio SDK omits consensus result. The owner must verify
+    // this EXACT hash on Explorer; typed text does not replace chain proof.
+    if(tx.consensusResult!=='NO_MAJORITY'){
+      if(tx.consensusResult!=='UNKNOWN')
+        throw Error('Original consensus result is not eligible for recovery');
+      const entered=globalThis.prompt(
+        'Open https://explorer-studio.genlayer.com/tx/'+FIRST_AI_ATTEMPT+
+        '\\nVerify method adjudicate_case and Consensus Result Undetermined.\\n'+
+        'Then type UNDETERMINED exactly. This is a MANUAL confirmation, not independent consensus verification.');
+      if(entered!=='UNDETERMINED')
+        throw Error('Explorer consensus not manually confirmed; no signature');
+    }
+    if(caseData.caseId!==p.caseId||caseData.caseStatus!=='FILED'||
+       caseData.verdict!=='PENDING'||caseData.contractVersion!=='v2'||
+       caseData.contractAddress?.toLowerCase()!==v2Address.toLowerCase()||
+       caseData.identityBinding!=='DETERMINISTIC_ID_MATCHED'||
+       caseData.settlement?.status!=='BASE_USDC_TRANSFER_VERIFIED'||
+       caseData.txHash!==p.txHash||caseData.payer!==p.payer||
+       caseData.payee!==p.payee||caseData.amountAtomic!==p.amountAtomic)
+      throw Error('Current GenLayer case is no longer safely pending');
+    let record=await sdk.readV2Contract(v2Address,'get_case',[p.caseId]);
+    if(typeof record==='string')record=JSON.parse(record);
+    if(record?.case_id!==p.caseId||record.status!=='FILED'||record.verdict!=='PENDING')
+      throw Error('Finalized GenLayer contract no longer allows adjudication');
+    // Recheck local one-shot state after all network reads.
+    if(signedLock(p.caseId,'adjudicate_case_recovery')||
+       signedLock(p.caseId,'adjudicate_case')?.hash?.toLowerCase()!==FIRST_AI_ATTEMPT)
+      throw Error('Signed attempt history changed; no recovery permitted');
+    const approved=globalThis.confirm(
+      'Submit ONE MORE GenLayer adjudicate_case for existing case '+p.caseId+'?\\n'+
+      'Original AI TX: '+FIRST_AI_ATTEMPT+' (FINALIZED; Explorer consensus checked).\\n'+
+      'Case remains FILED / PENDING. This will NOT charge USDC or re-file the case.\\n'+
+      'A NEW signed GenLayer transaction MAY CONSUME GEN fees and MAY AGAIN FAIL consensus.\\n'+
+      'Only one additional attempt is permitted; do not retry unknown outcomes. Sign once?'
+    );
+    if(!approved){v2Message('Additional GenLayer signature declined; nothing sent.');return;}
+    await v2Write('adjudicate_case',p.caseId,[p.caseId],null,'adjudicate_case_recovery');
+  }catch(error){
+    v2Message('Recovery blocked before signature: '+String(error?.message||'verification unavailable').slice(0,200));
+  }finally{v2Controls();}
+});
 $('v2-resume').addEventListener('click',async()=>{
   const id=trackedCaseV2?.caseId||verifiedPacket?.caseId;
   if(!id||!v2Address||!v2Wallet)return;
   if(id){
+    const recovery=signedLock(id,'adjudicate_case_recovery');
+    if(recovery?.hash){await refreshRecordedTransaction(id,'adjudicate_case',recovery.hash);return;}
+    if(recovery&&!recovery.hash){
+      v2Message('Additional AI attempt outcome unknown. Preserve lock and inspect wallet; do not resend.');
+      return;
+    }
     // The latest signed decision takes priority over a previously finalized filing.
     // Refreshing an old file_case first can mask a pending adjudication.
     for(const action of ['adjudicate_case','file_case']){

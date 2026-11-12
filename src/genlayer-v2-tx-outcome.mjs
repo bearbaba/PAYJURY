@@ -60,7 +60,9 @@ export function summarizeV2ReadOnlyTx(tx,hash){
     executionSource:conflict?'CONFLICTING_RECEIPTS':entries.map(e=>e.source).join(',')||'NOT_REPORTED',
     success:finalized&&!conflict&&!consensusConflict&&
       consensusResult==='MAJORITY_AGREE'&&execution==='FINISHED_WITH_RETURN',
-    note:consensusResult==='NO_MAJORITY'?
+    note:consensusResult==='UNKNOWN'?
+      'Studio SDK lacks validator consensus. Leader execution alone is NOT on-chain acceptance; inspect Explorer and contract state before a wallet action.':
+      consensusResult==='NO_MAJORITY'?
       'Validator consensus did not reach a majority; leader execution is not a persisted verdict. Confirm contract state before any separate, explicitly approved recovery.':
       consensusConflict?
       'Consensus fields contradict; no success may be inferred. Do not sign again without verification.':

@@ -226,8 +226,12 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
         try{
           const receipt=await verifyOriginalAiConsensus({hash});
           respond(res,200,receipt);
-        }catch{
-          respond(res,503,{error:'GenLayer canonical consensus receipt unavailable or unverified. No signing permitted.'});
+        }catch(error){
+          const message=String(error?.message||'');
+          const reason=message.includes('did not return a consensus record')?'RPC_RECORD_UNAVAILABLE':
+            message.includes('identity mismatch')?'RECEIPT_IDENTITY_MISMATCH':
+            message.includes('receipt RPC unavailable')?'RPC_HTTP_ERROR':'RPC_CONNECTION_FAILED';
+          respond(res,503,{error:'GenLayer canonical consensus receipt unavailable or unverified. No signing permitted.',reason});
         }
         return;
       }

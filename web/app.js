@@ -433,6 +433,10 @@ async function refreshRecordedTransaction(caseId,method,hash){
     return false;
   }
   if(!state.success){
+    if(state.consensusResult==='NO_MAJORITY'){
+      v2Message('Original GenLayer decision reached NO_MAJORITY: no verdict was stored. Review the existing case and the guarded recovery option; do not repeat the old TX.');
+      return false;
+    }
     // SDK v1.1.8 Studio getTransaction can omit top-level execution metadata.
     // FINALIZED / UNKNOWN does NOT mean the contract reverted.
     if(state.execution==='UNKNOWN'||state.executionConflict===true){
@@ -727,13 +731,14 @@ $('v2-adjudicate-recovery').addEventListener('click',async()=>{
     const sdk=await getV2Sdk();
     await requireGenuineV2Interface(sdk);
     const [txResponse,caseResponse]=await Promise.all([
-      fetch('/api/v2/tx?hash='+FIRST_AI_ATTEMPT,{cache:'no-store'}),
+      fetch('/api/v2/tx-consensus?hash='+FIRST_AI_ATTEMPT,{cache:'no-store'}),
       fetch('/api/case?version=v2&caseId='+encodeURIComponent(p.caseId),{cache:'no-store'})
     ]);
     if(!txResponse.ok||!caseResponse.ok)throw Error('Read-only consensus or case lookup unavailable');
     const [tx,caseData]=await Promise.all([txResponse.json(),caseResponse.json()]);
-    if(tx.hash!==FIRST_AI_ATTEMPT||tx.status!=='FINALIZED'||
-       tx.consensusResult!=='NO_MAJORITY'||tx.consensusConflict===true)
+    if(tx.hash!==FIRST_AI_ATTEMPT||tx.finalized!==true||tx.readOnly!==true||
+       tx.originalPayer!==p.payer||tx.contract!==v2Address.toLowerCase()||
+       tx.consensusResult!=='NO_MAJORITY')
       throw Error('Original AI attempt not independently confirmed as FINALIZED / NO_MAJORITY');
     if(caseData.caseId!==p.caseId||caseData.caseStatus!=='FILED'||
        caseData.verdict!=='PENDING'||caseData.contractVersion!=='v2'||

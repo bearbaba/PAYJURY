@@ -6,6 +6,10 @@ const credentials={
   UPSTASH_REDIS_REST_URL:'https://grateful-duck-11111.upstash.io',
   UPSTASH_REDIS_REST_TOKEN:'test-only-credential-long-enough'
 };
+const marketplaceCredentials={
+  KV_REST_API_URL:credentials.UPSTASH_REDIS_REST_URL,
+  KV_REST_API_TOKEN:credentials.UPSTASH_REDIS_REST_TOKEN
+};
 const approved={
   payer:'0x4c7cb73ac8f8999af21cfc9ff4cf2333a9508dcb',
   payee:'0xe3837fe309618ae075dbef0a20735c0615a308e6',
@@ -20,6 +24,17 @@ test('hosted checkout stays disabled with missing or unsafe Redis config',()=>{
   assert.equal(validUpstashConfig({...credentials,UPSTASH_REDIS_REST_TOKEN:'bad'}),false);
   assert.equal(validUpstashConfig(credentials),true);
   assert.throws(()=>createHostedOneShotLock({env:{}}),/Durable one-shot/);
+});
+
+test('Vercel Marketplace KV credentials work, but partial or unsafe overrides fail closed',()=>{
+  assert.equal(validUpstashConfig(marketplaceCredentials),true);
+  assert.equal(validUpstashConfig({...marketplaceCredentials,KV_REST_API_TOKEN:'short'}),false);
+  assert.equal(validUpstashConfig({...marketplaceCredentials,
+    UPSTASH_REDIS_REST_URL:'https://evil.example'}),false);
+  assert.equal(validUpstashConfig({...marketplaceCredentials,
+    UPSTASH_REDIS_REST_TOKEN:'test-only-credential-long-enough'}),false);
+  assert.equal(validUpstashConfig({...marketplaceCredentials,
+    KV_REST_API_URL:'https://grateful-duck-11111.upstash.io/other-path'}),false);
 });
 
 function mockRedis(){
@@ -66,6 +81,15 @@ test('durable SET NX reserves exactly one signed testnet purchase across instanc
   const outcome=JSON.parse(mock.values.get(key+':outcome'));
   assert.equal(outcome.state,'BASE_PAYMENT_VERIFIED');
   assert.equal(outcome.signature,undefined);
+});
+
+test('Marketplace KV credentials use the same durable one-shot Redis reservation',async()=>{
+  const mock=mockRedis();
+  const lock=createHostedOneShotLock({env:marketplaceCredentials,fetchImpl:mock.fetchImpl});
+  assert.equal(await lock.isLocked(),false);
+  assert.equal(await lock.reserve(approved),true);
+  assert.equal(await lock.isLocked(),true);
+  assert.equal(await lock.reserve(approved),false);
 });
 
 test('unknown or unavailable durable storage fails closed, no lock is treated as successful',async()=>{

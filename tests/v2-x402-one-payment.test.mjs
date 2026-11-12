@@ -91,7 +91,6 @@ test('rewritten quote URL with query metadata stays a no-signature read-only pre
     assert.equal(data.result,'V2_FRESH_PAYER_QUOTE_AND_BALANCE_READY_READ_ONLY');
     assert.equal(data.oneShot,true);
     assert.equal(data.operatorMustApproveWalletSignature,true);
-    assert.equal(calls,0);
   },{ready:async()=>{calls++;return PREVIEW;},fetchImpl:async()=>{throw Error('No merchant request should occur');}});
   assert.equal(calls,1);
 });

@@ -43,8 +43,9 @@ The production overview continues to display the original `DECIDED / ACCEPT` cas
 
 PAYJURY now has an *opt-in* Vercel checkout gate. It will not open until all of the following have been configured in the `payjury` Vercel project:
 
-- `UPSTASH_REDIS_REST_URL` — HTTPS REST endpoint of an independently provisioned Upstash Redis database
-- `UPSTASH_REDIS_REST_TOKEN` — the standard write-capable REST token, Vercel **server-side encrypted/sensitive variable only**, never pasted into chat or exposed in browser bundles
+- Vercel Marketplace Upstash integration: `KV_REST_API_URL` (HTTPS REST endpoint) and `KV_REST_API_TOKEN` (write-capable REST token) are automatically injected into the selected environment, e.g. Preview. PAYJURY accepts this matching pair without copying secrets.
+- Standalone Upstash setup: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` may be configured instead. If either standalone variable is present, both must be valid; no fallback or mixing of credentials.
+- Keep credentials as Vercel **server-side encrypted/sensitive variables only**; never paste tokens into chat or expose them in browser bundles.
 - `PAYJURY_NEW_CHECKOUT_ENABLED=1` — explicit release switch; DO NOT add until Redis readiness and CI gates pass
 
 Upstash must be **durable**, not the 72-hour anonymous scratch database. PAYJURY creates one permanent Redis reservation via atomic `SET key record NX`, with **no expiry**. The signed payment is not forwarded unless the store confirms that reservation. Reservation timeouts and uncertain outcomes remain locked. A separate key stores only nonsecret receipt metadata.

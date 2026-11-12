@@ -8,7 +8,6 @@ import {serveV2X402} from './v2-x402-relay.mjs';
 import {createHostedOneShotLock,validUpstashConfig,LIVE_PAYMENT_SESSION} from './hosted-payment-lock.mjs';
 import {restoreAcceptedV2Case} from './v2-known-case.mjs';
 import {summarizeV2ReadOnlyTx} from './genlayer-v2-tx-outcome.mjs';
-import {verifyOriginalAiConsensus,ORIGINAL_AI_TX} from './genlayer-consensus-receipt.mjs';
 import {isGenLayerOverlongRlpError} from './v2-raw-read.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../web');
@@ -215,23 +214,6 @@ export function createServer({rpcUrl=process.env.BASE_RPC_URL,
           }else{
             respond(res,503,{error:'GenLayer V2 RPC read unavailable. No wallet transaction was attempted.'});
           }
-        }
-        return;
-      }
-      if(req.method==='GET'&&url.pathname==='/api/v2/tx-consensus'){
-        const hash=url.searchParams.get('hash')||'';
-        if(hash!==ORIGINAL_AI_TX){
-          respond(res,422,{error:'Only the original one-take AI transaction is supported'});return;
-        }
-        try{
-          const receipt=await verifyOriginalAiConsensus({hash});
-          respond(res,200,receipt);
-        }catch(error){
-          const message=String(error?.message||'');
-          const reason=message.includes('did not return a consensus record')?'RPC_RECORD_UNAVAILABLE':
-            message.includes('identity mismatch')?'RECEIPT_IDENTITY_MISMATCH':
-            message.includes('receipt RPC unavailable')?'RPC_HTTP_ERROR':'RPC_CONNECTION_FAILED';
-          respond(res,503,{error:'GenLayer canonical consensus receipt unavailable or unverified. No signing permitted.',reason});
         }
         return;
       }

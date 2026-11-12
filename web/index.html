@@ -112,6 +112,15 @@
             </div>
             <p id="v2-pay-status" role="status" aria-live="polite">No new payment has been signed or sent. Complete the read-only quote check first.</p>
           </div>
+          <details class="advanced-payment" id="v2-one-take-recovery">
+            <summary>Restore a verified one-take payment packet (no new charge)</summary>
+            <p class="muted">If you already paid, use Copy packet from the original page and paste its JSON below. PAYJURY rechecks the Base receipt and recomputes the exact case ID. This does not send or retry any payment.</p>
+            <label>Previously copied case packet JSON
+              <textarea id="v2-import-packet" rows="4" maxlength="16000" placeholder="Paste the public PREPARED_NOT_FILED case JSON; never paste a wallet signature or private key."></textarea>
+            </label>
+            <div class="v2-buttons"><button type="button" id="v2-import-verify">Restore and re-verify paid case</button></div>
+            <p id="v2-import-status" role="status" aria-live="polite">Read-only recovery. No signature or payment will be requested.</p>
+          </details>
           <div class="fields two payment-start">
             <label>Network<select name="network" id="network"><option value="eip155:84532">Base Sepolia · Testnet</option><option value="eip155:8453">Base · Mainnet</option></select></label>
             <label>Base transaction hash<input name="txHash" placeholder="0x… confirmed Base transaction" required maxlength="66" spellcheck="false" autocomplete="off"></label>

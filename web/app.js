@@ -1,4 +1,5 @@
 import {assessV2FilingPreflight,KNOWN_RLP_READ_CODE} from './filing-policy.js';
+import {claimFromOneTakePacket,ONE_TAKE_CASE} from './restore-packet.js';
 const $=id=>document.getElementById(id);
 const NEW_LIVE_SESSION='payjury-v2-web-one-take-20261111';
 let freshHostedBlocked=false;
@@ -103,6 +104,45 @@ $('copy-case').addEventListener('click',async()=>{
     await navigator.clipboard.writeText(JSON.stringify(packet,null,2));
     const button=$('copy-case');button.textContent='Copied';setTimeout(()=>button.textContent='Copy packet',1500);
   }catch{display('COPY FAILED','Clipboard unavailable','Copy the case JSON using a supported browser clipboard permission.','error');}
+});
+// Recovery is read-only and restricted to the ONE already-paid testnet
+// session. The saved JSON is untrusted; the backend independently verifies
+// the Base receipt and recomputes the case ID before enabling any wallet UI.
+$('v2-import-verify').addEventListener('click',async()=>{
+  const button=$('v2-import-verify'),message=$('v2-import-status');
+  button.disabled=true;
+  message.textContent='Rechecking original Base USDC transfer and case identity. No payment or wallet signature.';
+  try{
+    const raw=$('v2-import-packet').value;
+    if(raw.length>16000)throw Error('Saved packet too large');
+    const saved=JSON.parse(raw);
+    const claim=claimFromOneTakePacket(saved);
+    const res=await fetch('/api/verify',{method:'POST',
+      headers:{'content-type':'application/json'},body:JSON.stringify(claim)});
+    const checked=await res.json();
+    if(!res.ok||checked.caseId!==ONE_TAKE_CASE||
+       checked.status!=='PREPARED_NOT_FILED'||
+       checked.settlement?.result!=='BASE_USDC_TRANSFER_VERIFIED')
+      throw Error('Original paid case could not be independently re-verified');
+    for(const [key,value] of Object.entries(claim))
+      form.elements.namedItem(key).value=value;
+    form.elements.namedItem('paymentResponseHeader').value='';
+    packet=checked;
+    updateV2PreparedPacket(checked);
+    setWorkflowStage(3);
+    $('track-id').value=checked.caseId;
+    $('track-version').value='v2';
+    $('case-id').textContent=checked.caseId;
+    $('verdict').textContent='NOT FILED';
+    $('copy-case').disabled=false;
+    $('read-verdict').disabled=true;
+    display('TRANSFER VERIFIED','Original paid case restored — not filed',
+      'Independent Base receipt and deterministic case identity verified again. No payment or GenLayer transaction was submitted.','success');
+    message.textContent='RESTORED: '+checked.caseId+'. Connect the SAME payer wallet on Studionet 61999; review filing preflight before any write.';
+  }catch(error){
+    message.textContent='Recovery blocked: '+String(error?.message||'Invalid saved packet').slice(0,160)+
+      '. Never repeat the x402 payment.';
+  }finally{button.disabled=false;}
 });
 fetch('/api/status').then(res=>res.json()).then(data=>{
   const freshPanel=$('v2-fresh-purchase-panel');

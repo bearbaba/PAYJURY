@@ -87,10 +87,13 @@ export async function serveV2X402({
 }){
   if(req.method!=='GET')return json(res,405,{error:'Only GET is supported'});
   if(!rpcUrl)return json(res,503,{error:'Base Sepolia RPC missing; no payment made'});
+  // Vercel rewrites may preserve route/query metadata in req.url.
+  // Match the parsed pathname, not the raw URL, for quote/execute dispatch.
+  const requestPath=new URL(req.url||'/','https://payjury.invalid').pathname;
   const signature=req.headers['payment-signature'];
   if(!signature){
     try{
-      if(req.url==='/api/v2/x402/quote'){
+      if(requestPath==='/api/v2/x402/quote'){
         const preview=await ready({rpcUrl,fetchImpl});
         return json(res,200,{...preview,
           oneShot:true,baseNetworkOnly:true,operatorMustApproveWalletSignature:true});
@@ -105,7 +108,7 @@ export async function serveV2X402({
     }
     return;
   }
-  if(req.url!=='/api/v2/x402/execute')
+  if(requestPath!=='/api/v2/x402/execute')
     return json(res,422,{error:'Signed payments permitted only at the one-shot execute route'});
   let validated;
   try{validated=validateV2PaymentSignature(signature);}

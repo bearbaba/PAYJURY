@@ -1,28 +1,17 @@
-# PAYJURY — 45-second Internet Court demo guide
+# PAYJURY — 42-second Partner Demo Lab storyboard
 
-**This is a filming plan, NOT a claim that the live acceptance has passed.** Do not record a simulated payment as real or show an invented FINALIZED verdict. Only publish the complete live sequence after the gates in [ACCEPTANCE.md](ACCEPTANCE.md) are independently evidenced.
+**This is a verified working testnet case, not a product simulation.** All key transaction numbers below refer to the **12 November 2026** x402 purchase and V2 decision, not historical demo cases.
 
-## One-take structure (45 seconds maximum)
-
-| Time | Visual | Message |
+| Time | Shot | Voiceover / caption |
 | --- | --- | --- |
-| 0–5 s | PAYJURY Hero and product name | “AI agents can pay instantly. Who checks what they receive?” |
-| 5–13 s | Original real x402 HTTP 402 quote and Base transaction explorer | “A real x402 payment — exact USDC transfer, independently checked.” |
-| 13–23 s | Web: Pay → Dispute; show immutable terms and received API evidence | “The buyer files what was promised and what was actually delivered.” |
-| 23–35 s | GenLayer Studio transaction FINALIZED with successful GenVM and get_case DECIDED | “GenLayer’s validators reach an evidence-based verdict.” |
-| 35–43 s | Web Verdict readback and linked case/payment IDs | “One audit trail from payment to delivery decision.” |
-| 43–45 s | Logo and repo URL | “PAYJURY — Evidence before verdict.” |
+| 0–4s | Animated title; three marks: Internet Court, GenLayer, x402 | “A payment proves money moved. Who checks delivery?” |
+| 4–11s | Original x402 wallet payment recording | “PAYJURY connects x402 API payments with GenLayer.” |
+| 11–18s | Base USDC receipt and actual case identity | “0.01 test USDC, verified on Base Sepolia.” |
+| 18–25s | V2 case evidence form, no fake wallet transaction | “Terms and delivery evidence become one immutable case.” |
+| 25–32s | Real adjudication TX / GenLayer tracking | “GenLayer AI judges the submitted terms.” |
+| 32–39s | Actual case readback: DECIDED / ACCEPT | “A recorded AI verdict — independently readable.” |
+| 39–42s | Closing brand slate + repo and demo URL | “PAYJURY. Every verdict has a trail.” |
 
-**Do not publish the final script as E2E until the independent chain proof is available.** If GenLayer is only FILED or a case was never deployed, narrate the real status; do not fake a green verdict.
+**Mandatory:** no more than 45 seconds total, readable English, visually edited with motion, three logos. Cite [public evidence](PARTNER_DEMO_2026.md). Use real GenLayer V2 case `pj_6575f7352b41602401caf317ce30f86b` and the **second** adjudication TX `0x5caff764597a0a43655cd0eb694023c03719a845b5b7d57b0730b36e289d3374`.
 
-## Required media and proof
-- Exact provider and endpoint (show no bearer token)
-- EIP-3009 x402 testnet payment and facilitator receipt (redact private details)
-- Public Base Sepolia USDC Transfer TX
-- PAYJURY case ID, actual GenLayer Studionet filing and adjudication TX
-- GenVM validator receipt and final get_case readback
-- GitHub README, SKILL.md and reproducible steps
-- 45 seconds or less, clean English on-screen copy and captions
-
-## Presentation rules
-Use original PAYJURY branding, approved GenLayer/x402 wordmarks only where permission is confirmed, high contrast text, no tiny code windows, no unrelated generated screenshots, and no payout/refund claims. Never expose wallet keys or payment authorizations in recordings.
+**Scope:** The final GenLayer decision is `DECIDED / ACCEPT` for the narrow HTTP 2xx + nonempty-body terms. No merchant attestation, payload correctness, production readiness, escrow or refund claims. The first adjudication TX was `Undetermined`; showing leader output as the verdict would be false.

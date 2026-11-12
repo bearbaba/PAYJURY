@@ -8,7 +8,7 @@ import {summarizeV2ReadOnlyTx} from '../src/genlayer-v2-tx-outcome.mjs';
 const TX='0xd6dffb31d5595ef5b70e1f3b75816161950822916e6444e39a5a3385e9ad2018';
 const CONTRACT='0x0a6171C6a580c58d999a251436CE7c63FFc3dc31';
 const receipt=execution_result=>({
-  hash:TX,statusName:'FINALIZED',
+  hash:TX,statusName:'FINALIZED',resultName:'MajorityAgree',result:1,
   consensus_data:{leader_receipt:[{
     execution_result,genvm_result:{stdout:'',stderr:''}
   }]}
@@ -21,6 +21,24 @@ test('Studio GenVM receipt SUCCESS is final success even if SDK top-level execut
   assert.equal(x.executionKnown,true);
   assert.equal(x.success,true);
   assert.match(x.executionSource,/leader_receipt/);
+});
+test('FINALIZED leader success is not accepted when consensus has NO_MAJORITY',()=>{
+  const x=summarizeV2ReadOnlyTx({
+    ...receipt('SUCCESS'),resultName:'NoMajority',result:5
+  },TX);
+  assert.equal(x.status,'FINALIZED');
+  assert.equal(x.execution,'FINISHED_WITH_RETURN');
+  assert.equal(x.consensusResult,'NO_MAJORITY');
+  assert.equal(x.success,false);
+  assert.match(x.note,/not a persisted verdict/);
+});
+test('Missing or contradictory consensus refuses to infer success',()=>{
+  assert.equal(summarizeV2ReadOnlyTx({
+    ...receipt('SUCCESS'),resultName:undefined,result:undefined
+  },TX).success,false);
+  const conflict=summarizeV2ReadOnlyTx({...receipt('SUCCESS'),resultName:'NoMajority'},TX);
+  assert.equal(conflict.consensusConflict,true);
+  assert.equal(conflict.success,false);
 });
 test('Studio GenVM receipt ERROR is a genuine error even if consensus says FINALIZED',()=>{
   const x=summarizeV2ReadOnlyTx(receipt('ERROR'),TX);

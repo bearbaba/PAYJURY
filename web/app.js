@@ -341,7 +341,11 @@ function v2Controls(){
     trackedCaseV2.identityBinding==='DETERMINISTIC_ID_MATCHED'&&
     trackedCaseV2.settlement?.status==='BASE_USDC_TRANSFER_VERIFIED'&&
     [trackedCaseV2.claimant?.toLowerCase(),trackedCaseV2.payer?.toLowerCase()].includes(v2Wallet?.toLowerCase());
-  $('v2-adjudicate').disabled=!signed||!pending;
+  // A submitted decision stays one-shot even if chain readback still says FILED.
+  // Only inspect its recorded TX; never offer a second signing.
+  const attemptedDecision=Boolean(trackedCaseV2?.caseId&&
+    signedLock(trackedCaseV2.caseId,'adjudicate_case'));
+  $('v2-adjudicate').disabled=!signed||!pending||attemptedDecision;
   const currentCase=trackedCaseV2?.caseId||verifiedPacket?.caseId;
   const delegate=$('v2-delegate').value.trim().toLowerCase();
   const delegationKey=verifiedPacket&&WALLET_ADDR.test(delegate)?
@@ -695,7 +699,9 @@ $('v2-resume').addEventListener('click',async()=>{
   const id=trackedCaseV2?.caseId||verifiedPacket?.caseId;
   if(!id||!v2Address||!v2Wallet)return;
   if(id){
-    for(const action of ['file_case','adjudicate_case']){
+    // The latest signed decision takes priority over a previously finalized filing.
+    // Refreshing an old file_case first can mask a pending adjudication.
+    for(const action of ['adjudicate_case','file_case']){
       const existing=signedLock(id,action);
       if(existing?.hash){await refreshRecordedTransaction(id,action,existing.hash);return;}
     }

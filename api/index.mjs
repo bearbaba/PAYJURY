@@ -9,7 +9,7 @@ const upstream=createServer();
 const handle=upstream.listeners('request')[0];
 const ALLOWED=new Set([
   'status','case','verdict','inspect','verify',
-  'v2/read','v2/tx','v2/candidate','v2/resume-known'
+  'v2/read','v2/tx','v2/tx-consensus','v2/candidate','v2/resume-known'
 ]);
 const SIGNED_PAYMENT_ROUTES=new Set(['v2/x402/quote','v2/x402/execute','v2/x402/session']);
 const activeCheckout=()=>process.env.PAYJURY_NEW_CHECKOUT_ENABLED==='1'&&validUpstashConfig();

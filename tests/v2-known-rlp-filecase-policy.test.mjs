@@ -7,8 +7,8 @@ import {assessV2FilingPreflight,KNOWN_RLP_READ_CODE} from '../web/filing-policy.
 const payer='0x4c7cb73ac8f8999af21cfc9ff4cf2333a9508dcb';
 const v2='0x0a6171C6a580c58d999a251436CE7c63FFc3dc31';
 const packet={
-  caseId:'pj_9f2276fd1904120b16d5f5b6ea5f7a2b',
-  network:'eip155:84532',txHash:'0x6edc3d9a0589f22e55ca4f348bc021df70b5644b437fef054099391fae798ae2',
+  caseId:'pj_6575f7352b41602401caf317ce30f86b',
+  network:'eip155:84532',txHash:'0x8f90716a44d142be61d042929b4f7fd588711deb805a3e25df7128254f5f24bd',
   token:'0x036cbd53842c5426634e7929541ec2318f3dcf7e',
   payer,payee:'0xe3837fe309618ae075dbef0a20735c0615a308e6',
   amountAtomic:'10000',status:'PREPARED_NOT_FILED',
@@ -40,6 +40,17 @@ test('known RPC RLP bug permits only exact case, same payer and independent can_
     assert.equal(reject.allow,false,'changed '+key+' must reject');
   }
 });
+test('historical decided V2 payment and case cannot be filed again',()=>{
+  const earlierV2Case='pj_9f2276fd1904120b16d5f5b6ea5f7a2b';
+  const earlierV2Tx='0x6edc3d9a0589f22e55ca4f348bc021df70b5644b437fef054099391fae798ae2';
+  const historicCase=assess({packet:{...packet,caseId:earlierV2Case},
+    filingStatus:'READY_REQUIRES_BASE_PROOF'});
+  const historicTx=assess({packet:{...packet,txHash:earlierV2Tx},
+    readErrorCode:KNOWN_RLP_READ_CODE,payerRights:true});
+  assert.equal(historicCase.allow,false);
+  assert.equal(historicTx.allow,false);
+});
+
 test('do not authorize forged, unknown, nonfinal or missing-rights read failures',()=>{
   for(const props of [
     {readErrorCode:KNOWN_RLP_READ_CODE,payerRights:false},

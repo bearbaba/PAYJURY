@@ -42,7 +42,7 @@
     <section class="tracker container" id="case-tracker">
       <div class="tracker-head">
         <div><div class="eyebrow">CASE OVERVIEW · GENLAYER STUDIONET</div><h2>Every verdict has a trail.</h2>
-          <p>One real x402 payment. One GenLayer V2 case. A live, independently checked decision — no wallet or repeat transaction needed.</p></div>
+          <p>Open the newest completed x402 payment dispute and inspect its real GenLayer V2 AI decision in one click — no wallet, repeat payment or new signature.</p></div>
         <span class="tag proof-scope">LIVE ON-CHAIN READ · BASE SEPOLIA</span>
       </div>
       <div class="panel tracker-panel">
@@ -58,10 +58,10 @@
             <select id="track-version" name="version"><option value="v2" selected>V2 · Authorized filing</option><option value="v1">V1 · Verified history</option></select>
           </label>
           <label for="track-id">GenLayer Case ID
-            <input id="track-id" name="caseId" value="pj_9f2276fd1904120b16d5f5b6ea5f7a2b" placeholder="pj_…" required pattern="pj_[0-9a-f]{32}" maxlength="35" autocomplete="off" spellcheck="false">
+            <input id="track-id" name="caseId" value="pj_6575f7352b41602401caf317ce30f86b" placeholder="pj_…" required pattern="pj_[0-9a-f]{32}" maxlength="35" autocomplete="off" spellcheck="false">
           </label>
           <button type="submit" id="track-button">↻ Refresh proof</button>
-          <button type="button" id="track-example" class="tracker-example">Reset to V2 example</button>
+          <button type="button" id="track-example" class="tracker-example">Load latest verified V2 case</button>
         </form>
         <p class="tracker-message" id="track-message" role="status" aria-live="polite">Reading GenLayer and verifying the Base receipt…</p>
         <div class="proof-timeline" id="proof-timeline" aria-label="Evidence checkpoints">
@@ -76,11 +76,25 @@
             <div><span>Base payment proof</span><strong id="track-payment">—</strong></div>
             <div><span>Case identity binding</span><strong id="track-binding">—</strong></div>
           </div>
+          <div class="ai-proof-why">
+            <span>WHY GENLAYER AI?</span>
+            <p>The GenLayer Intelligent Contract interprets submitted delivery evidence against buyer terms and asks validators to check the judgment before storing it. The completed case below tests the <b>narrow</b> requirement of HTTP 2xx and a nonempty response; it does <b>not</b> establish API content accuracy.</p>
+          </div>
+          <details id="track-docket" class="court-docket" hidden>
+            <summary>Inspect the actual buyer terms and delivery evidence judged on-chain <span>READ ONLY</span></summary>
+            <p id="track-docket-status" role="status" aria-live="polite">Open to read the exact on-chain case fields.</p>
+            <div class="docket-grid">
+              <div><span>ORIGINAL ACCEPTANCE TERMS</span><p id="track-terms">—</p></div>
+              <div><span>RECORDED API DELIVERY</span><p id="track-delivery">—</p></div>
+              <div><span>SUPPORTING EVIDENCE</span><p id="track-evidence">—</p></div>
+            </div>
+          </details>
           <div class="reason-section"><div class="reason-heading"><span>GENLAYER AI REASONING</span><span class="reason-meta">On-chain readback</span></div><p id="track-reason"></p></div>
           <p class="tracker-caveat">The receipt proves only a USDC transfer; adjudication is separate. This readback does not independently audit GenLayer transaction finality or prove merchant delivery quality or claimant authorization.</p>
           <div class="tracker-links">
             <a id="track-base-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Base payment ↗</a>
             <a id="track-genlayer-link" href="https://explorer-studio.genlayer.com/address/0x0a6171C6a580c58d999a251436CE7c63FFc3dc31" target="_blank" rel="noopener noreferrer">GenLayer contract ↗</a>
+            <a id="track-decision-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Real AI adjudication TX ↗</a>
             <button type="button" id="track-copy-id" disabled>Copy Case ID</button>
             <button type="button" id="track-export" class="operator-only" disabled>Export proof JSON ↓</button>
           </div>

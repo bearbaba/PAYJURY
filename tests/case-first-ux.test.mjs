@@ -27,8 +27,12 @@ test('user overview, manager workspace and presentation all show authentic live 
     assert.match(html,/id="proof-timeline"/);
     assert.match(html,/id="track-outcome"/);
     assert.match(html,/id="track-export"/);
+    assert.match(html,/id="track-docket"/);
+    assert.match(html,/id="track-decision-link"/);
+    assert.match(html,/WHY GENLAYER AI/);
+    assert.match(html,/Load latest verified V2 case/);
     assert.match(html,/id="track-version"/);
-    assert.match(html,/value="pj_9f2276fd1904120b16d5f5b6ea5f7a2b"/);
+    assert.match(html,/value="pj_6575f7352b41602401caf317ce30f86b"/);
     assert.match(html,/id="deployment-message"/);
     assert.match(js,/queueMicrotask\(\(\)=>/);
     assert.match(js,/\$\('track-form'\)\.requestSubmit\(\)/);

@@ -1,5 +1,6 @@
 import {assessV2FilingPreflight,KNOWN_RLP_READ_CODE} from './filing-policy.js';
 import {claimFromOneTakePacket,ONE_TAKE_CASE} from './restore-packet.js';
+import {validateV2CourtDocket} from './court-evidence.js';
 const $=id=>document.getElementById(id);
 const NEW_LIVE_SESSION='payjury-v2-web-one-take-20261111';
 let freshHostedBlocked=false;
@@ -205,7 +206,7 @@ fetch('/api/status').then(res=>res.json()).then(data=>{
 
 
 const CASE_ID=/^pj_[0-9a-f]{32}$/;
-let lastVerifiedTrack=null;
+let lastVerifiedTrack=null,lastVerifiedDocket=null;
 function proofState({phase='reading',title='Reading on-chain decision…',subtitle='Rechecking original evidence'}={}){
   const cover=$('track-outcome');
   cover.textContent=title;
@@ -239,6 +240,7 @@ $('track-export').addEventListener('click',()=>{
       payee:record.payee,amountAtomic:record.amountAtomic,asset:record.asset,
       settlement:record.settlement},
     identityBinding:record.identityBinding,
+    onChainDocket:lastVerifiedDocket?.caseId===record.caseId?lastVerifiedDocket:null,
     disclaimer:'This readback does not independently prove GenLayer TX finality, HTTP payload correctness, or refund rights.'
   };
   const blob=new Blob([JSON.stringify(summary,null,2)],{type:'application/json'});
@@ -256,6 +258,13 @@ $('track-form').addEventListener('submit',async event=>{
   const id=$('track-id').value.trim();
   const message=$('track-message'),button=$('track-button');
   lastVerifiedTrack=null;
+  lastVerifiedDocket=null;
+  $('track-docket').hidden=true;
+  $('track-docket').open=false;
+  $('track-docket').dataset.caseId='';
+  $('track-docket').dataset.loaded='';
+  $('track-docket-status').textContent='Open to read the exact on-chain case fields.';
+  $('track-decision-link').hidden=true;
   $('track-copy-id').disabled=true;
   $('track-export').disabled=true;
   $('track-results').hidden=true;
@@ -310,6 +319,13 @@ $('track-form').addEventListener('submit',async event=>{
       $('track-genlayer-link').textContent='View GenLayer '+version.toUpperCase()+' contract ↗';
     }
     $('track-results').hidden=false;
+    // Expose natural-language claims only after verified case + Base proof.
+    $('track-docket').hidden=version!=='v2'||!decided||!consistent;
+    $('track-docket').dataset.caseId=data.caseId;
+    if(version==='v2'&&data.caseId===VERIFIED_V2_CASE&&decided){
+      $('track-decision-link').href='https://explorer-studio.genlayer.com/tx/'+VERIFIED_V2_DECISION_TX;
+      $('track-decision-link').hidden=false;
+    }
     if(version==='v2')updateV2TrackedCase(data);
     const flags=[];
     if(data.settlement?.status!=='BASE_USDC_TRANSFER_VERIFIED')
@@ -327,12 +343,49 @@ $('track-form').addEventListener('submit',async event=>{
     message.textContent=String(error?.message||'Case lookup unavailable').slice(0,220);
   }finally{button.disabled=false;}
 });
-const VERIFIED_V2_CASE='pj_9f2276fd1904120b16d5f5b6ea5f7a2b';
+// The landing proof is the new, genuinely wallet-authorized 12 Nov V2 case.
+const VERIFIED_V2_CASE='pj_6575f7352b41602401caf317ce30f86b';
+const HISTORICAL_V2_CASE='pj_9f2276fd1904120b16d5f5b6ea5f7a2b';
+const COMPLETED_V2_CASES=new Set([VERIFIED_V2_CASE,HISTORICAL_V2_CASE]);
+const VERIFIED_V2_DECISION_TX='0x5caff764597a0a43655cd0eb694023c03719a845b5b7d57b0730b36e289d3374';
 $('track-example').addEventListener('click',()=>{
   $('track-version').value='v2';
   $('track-id').value=VERIFIED_V2_CASE;
   $('track-form').requestSubmit();
 });
+// Optional, read-only contract terms: only publish after a fresh live V2
+// case reconciliation and strict match against the get_case response.
+$('track-docket').addEventListener('toggle',async()=>{
+  const panel=$('track-docket');
+  if(!panel.open||panel.hidden||panel.dataset.loaded==='yes')return;
+  const expected=lastVerifiedTrack;
+  if(!expected||expected.contractVersion!=='v2'||
+     expected.caseStatus!=='DECIDED'||panel.dataset.caseId!==expected.caseId)return;
+  panel.dataset.loaded='pending';
+  $('track-docket-status').textContent='Reading original GenLayer evidence (no signing)…';
+  try{
+    const path='/api/v2/read?method=get_case&args='+
+      encodeURIComponent(JSON.stringify([expected.caseId]));
+    const res=await fetch(path,{cache:'no-store'});
+    const payload=await res.json();
+    if(!res.ok)throw Error(payload.error||'GenLayer docket read unavailable');
+    const docket=validateV2CourtDocket(payload,expected);
+    if(lastVerifiedTrack!==expected||panel.dataset.caseId!==expected.caseId)return;
+    lastVerifiedDocket=docket;
+    $('track-terms').textContent=docket.terms;
+    $('track-delivery').textContent=docket.delivery;
+    $('track-evidence').textContent=docket.evidence;
+    $('track-docket-status').textContent=
+      'Read directly from GenLayer V2; matched case ID, contract, payment and recorded verdict. No signature.';
+    panel.dataset.loaded='yes';
+  }catch(error){
+    if(lastVerifiedTrack!==expected)return;
+    panel.dataset.loaded='';
+    $('track-docket-status').textContent='On-chain evidence unavailable: '+
+      String(error?.message||'Read failed').slice(0,140)+'. No evidence is assumed.';
+  }
+});
+
 // The landing page is a proof-first demo. This is one read-only lookup,
 // never a payment, a wallet signature or a GenLayer write.
 queueMicrotask(()=>{
@@ -354,7 +407,7 @@ function v2Controls(){
   const enabled=Boolean(v2Address);
   $('v2-connect').disabled=!enabled||v2Busy;
   const signed=enabled&&Boolean(v2Wallet)&&!v2Busy;
-  const decidedHistorical=verifiedPacket?.caseId===VERIFIED_V2_CASE;
+  const decidedHistorical=COMPLETED_V2_CASES.has(verifiedPacket?.caseId);
   const alreadyFiled=Boolean(trackedCaseV2&&trackedCaseV2.caseId===verifiedPacket?.caseId&&
     ['FILED','DECIDED'].includes(trackedCaseV2.caseStatus));
   const prepared=Boolean(verifiedPacket)&&verifiedPacket.txHash!==V1_HISTORIC_TX&&!decidedHistorical;
@@ -405,7 +458,7 @@ function updateV2PreparedPacket(next){
     $('v2-payment').textContent=next.amountAtomic+' atomic USDC · '+next.network;
     v2Message(next.txHash===V1_HISTORIC_TX?
       'This historic payment was already filed and decided in V1. Do not file it again.':
-      next.caseId===VERIFIED_V2_CASE?
+      COMPLETED_V2_CASES.has(next.caseId)?
         'The completed V2 case must be tracked read-only. Filing and adjudication are disabled for this case.':
       v2Address?'Base payment independently verified. Connect a GenLayer wallet and review filing rights.':
       'Evidence is prepared, but V2 has not been deployed and verified. Signing stays disabled.');
@@ -1076,15 +1129,27 @@ $('v2-restore-paid').addEventListener('click',async()=>{
     updateV2PreparedPacket(p);
     setWorkflowStage(3);
     $('case-id').textContent=p.caseId;
-    $('verdict').textContent='NOT FILED';
+    $('verdict').textContent='NOT CHECKED';
     $('track-id').value=p.caseId;
     $('track-version').value='v2';
     $('copy-case').disabled=false;
     $('read-verdict').disabled=true;
-    display('BASE USDC VERIFIED','Already-paid V2 case restored',
-      'Original Base Sepolia USDC receipt independently reverified. No new payment, GenLayer filing or AI verdict occurred. Connect the same wallet on Studionet and review File Case.','success');
-    message.textContent='Original payment reverified · '+p.settlement.confirmations+
-      ' Base confirmations · case '+p.caseId+'. Continue with GenLayer wallet. Do NOT pay x402 again.';
+    display('BASE USDC VERIFIED','Already-paid V2 packet restored — checking chain',
+      'Base receipt independently reverified. A saved packet never proves that an on-chain case is still NOT FILED.','success');
+    try{
+      const existing=await fetch('/api/case?version=v2&caseId='+encodeURIComponent(p.caseId),
+        {cache:'no-store'});
+      if(!existing.ok)throw Error('V2 readback unavailable');
+      const live=await existing.json();
+      if(!syncCurrentV2WorkflowReadback(live))throw Error('On-chain case mismatch');
+      updateV2TrackedCase(live);
+      message.textContent='Original payment reverified · case '+p.caseId+' · '+
+        live.caseStatus+(live.caseStatus==='DECIDED'?' / '+live.verdict:'')+
+        '. No new payment or GenLayer transaction.';
+    }catch{
+      message.textContent='Original payment reverified · case '+p.caseId+
+        '. GenLayer state NOT CHECKED. Use the read-only case tracker; do not repeat payment.';
+    }
   }catch(error){
     message.textContent='Restore stopped: '+String(error?.message||error).slice(0,220)+
       '. Original x402 payment must NOT be repeated.';

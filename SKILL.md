@@ -1,66 +1,79 @@
 ---
 name: payjury-evidence-court
-description: Inspect x402 API payment evidence, verify Base USDC transfer, prepare immutable delivery disputes and read GenLayer Intelligent Contract verdicts without inventing success or signing automatically.
+description: Reproduce and independently inspect an actual x402-to-GenLayer V2 dispute: verify Base Sepolia USDC transfer, deterministic case identity, and persisted AI judgment. No wallet required for historical readback.
 ---
 
-# PAYJURY agent skill — evidence before verdict
+# PAYJURY agent skill — inspect an x402 payment and GenLayer AI decision
 
 ## When to use
-Use when a buyer/AI agent paid for an HTTP x402 API response and disputes the delivery quality, format, source completeness or compliance with pre-agreed requirements.
 
-## Capabilities
-1. Inspect an actual x402 v2 HTTP 402 `PAYMENT-REQUIRED` quote using `npm run quote`. Exact HTTPS hostname allowlist required. **This never pays.**
-2. Validate a user-supplied payment claim by `POST /api/verify` against an independent Base RPC. Require exact network, official USDC token, payer, merchant, amount and transfer transaction with two confirmations. The optional x402 `PAYMENT-RESPONSE` must match. **A merchant-provided header alone is not payment proof.**
-3. Produce a `PREPARED_NOT_FILED` case packet with fixed acceptance terms, actual delivered output, supporting evidence, Base transfer reference and deterministic `pj_<sha256>` case ID.
-4. Only after an operator explicitly files and adjudicates a real PayJury contract case, read GenLayer `GET /api/verdict?caseId=...` and report the persisted decision with the explicit caveat that the web readback does not replace independently checked GenVM transaction finality.
+A buyer/AI agent pays an x402 HTTP API, then asks if delivery satisfied the original immutable terms. PAYJURY connects independent **Base USDC settlement checks** to payer-authorized **GenLayer Intelligent Contract** filing and AI adjudication.
 
-## Trust boundaries
+This skill documents an actual, completed 12 Nov 2026 V2 case. It **does not** authorize reproducing the paid purchase, signature, on-chain filing, or adjudication.
 
-- x402 on **Base** (Sepolia ID 84532 or mainnet ID 8453) is a separate network from GenLayer **Studionet** (ID 61999).
-- GenLayer decides the semantics of the API delivery. The contract does **not** directly verify Base payment proofs.
-- Transaction hash, buyer testimony, screenshots, supplied API data and model output are untrusted until checked with the relevant independent source.
-- A Base USDC Transfer does not itself prove that an HTTP request caused the transfer or that the paid API returned accurate data.
-- A GenLayer AI verdict is not a legally binding judgment, escrow instruction or automatic refund.
+## Reproduce the live result (read-only; no wallet)
 
-## Workflow
+1. Open https://payjury.vercel.app/?view=overview . Select **V2** if needed. It loads the latest accepted case by default.
+2. Select **Refresh proof** with case ID `pj_6575f7352b41602401caf317ce30f86b`.
+3. Verify each field separately:
+   - `caseStatus=DECIDED`, `verdict=ACCEPT` from GenLayer `get_case`.
+   - `identityBinding=DETERMINISTIC_ID_MATCHED` independently recomputed.
+   - `settlement.status=BASE_USDC_TRANSFER_VERIFIED`, after checking the Base receipt and official USDC Transfer log.
+4. Open **Inspect the actual buyer terms and delivery evidence judged on-chain**. This read-only disclosure cross-checks the fresh contract `get_case` fields against the verified payment/case identity before showing original terms, delivered response metadata and supporting evidence.
+5. Follow the Explorer records below. Never treat `FINALIZED` plus leader execution as proof of majority consensus if the SDK did not report the validator result.
+6. Export proof JSON if needed; it is **not signed** and is not cryptographic proof that the merchant delivered correct content.
 
-### Safe read-only discovery
-
+Read-only endpoints:
 ```bash
-# Exact host allowlist; never a local, private or arbitrary internal endpoint.
-X402_QUOTE_URL=https://your-verified-api.example/paid \
-X402_ALLOWED_HOST=your-verified-api.example npm run quote
+curl "https://payjury.vercel.app/api/case?version=v2&caseId=pj_6575f7352b41602401caf317ce30f86b"
+curl "https://payjury.vercel.app/api/v2/read?method=get_case&args=%5B%22pj_6575f7352b41602401caf317ce30f86b%22%5D"
 ```
 
-Requires `X402_QUOTE_INSPECTED_NOT_PAID`. Confirm one supported scheme: `exact`, supported network, official USDC, price <=0.10 USDC. Do not infer a successful purchase.
+## Authentic evidence ledger
 
-### Prepare a case
+| Source | Actual public proof |
+| --- | --- |
+| HTTP x402 payment | [Base Sepolia USDC TX](https://sepolia.basescan.org/tx/0x8f90716a44d142be61d042929b4f7fd588711deb805a3e25df7128254f5f24bd) — exactly 10,000 atomic units, 0.01 test USDC |
+| Intelligent Contract V2 | [GenLayer Studionet 61999](https://explorer-studio.genlayer.com/address/0x0a6171C6a580c58d999a251436CE7c63FFc3dc31) |
+| First adjudication attempt | [GenLayer TX](https://explorer-studio.genlayer.com/tx/0x1104d521fd6ad7e5bd38254034bb93ca303dd3ac9097150ea9792f21b1b30510): consensus Undetermined. **Not a persisted verdict.** |
+| Second, explicitly approved AI adjudication | [GenLayer TX](https://explorer-studio.genlayer.com/tx/0x5caff764597a0a43655cd0eb694023c03719a845b5b7d57b0730b36e289d3374): FINALIZED; authoritative `get_case` reports DECIDED / ACCEPT |
+| Verified case state | [Live PAYJURY JSON](https://payjury.vercel.app/api/case?version=v2&caseId=pj_6575f7352b41602401caf317ce30f86b) |
+
+The initial AI transaction did **not** persist the verdict, and Studio SDK did not expose the second receipt's validator consensus result. PAYJURY relies on independently checking the stored contract state, not fabricating a validator vote.
+
+## What GenLayer actually does
+
+`contracts/PayJuryV2.py` is not decorative. It implements:
+
+- `file_case`: **only payer or on-chain-authorized delegate**; validates case ID built from payment reference + immutable terms/delivery/evidence, rejects replay of the same transaction.
+- `adjudicate_case`: only claimant or payer may request judgment on a filed case. GenLayer `gl.nondet.exec_prompt` evaluates supplied natural-language terms and evidence; the contract validates JSON verdict `ACCEPT`, `REWORK` or `UNVERIFIABLE`.
+- `gl.vm.run_nondet_unsafe(judge,validate_judge)`: validators independently re-evaluate the verdict category rather than trusting frontend output. A consensus error can leave the case FILED/PENDING, as observed in the first transaction.
+- `get_case`: reads the persisted status, verdict and exact reason; the web app does not invent either.
+
+**Important scope:** The one completed case demonstrates the **narrow** contract terms “HTTP 2xx and nonempty body after 0.01 test USDC settlement.” It does **not** test content correctness, subjective quality, or merchant misconduct. The contract's flexible adjudication engine can accept broader text requirements, but **no separate live REWORK or UNVERIFIABLE case is claimed**.
+
+For example, a *future hypothetical case* might require “The paid API must provide five valid, source-linked citations; citations must actually support the stated assertions.” Evaluating this requires interpretation, unlike a binary HTTP status. This example is NOT a recorded PAYJURY verdict and must never be presented as one.
+
+## Trust boundaries and safe limits
+
+- Base Sepolia (84532) and GenLayer Studionet (61999) are separate chains. GenLayer's contract does not verify Base settlement itself; PAYJURY's off-chain service does.
+- The original HTTP client reported status 200, 467-byte body and SHA-256 hash. The full raw response and merchant-signed delivery attestation were **not preserved**. Payment verification does not cryptographically prove x402 causality or content quality.
+- Only the wallet may approve transactions; no server key. Completed transactions and one-shot payment markers must **never be replayed** to make a demo look successful.
+- Do not paste private keys, wallet payment authorization headers, bearer tokens, secrets or webhooks into this skill.
+- No escrow, refunds, legal binding, Mainnet guarantees or production audits.
+- If a read fails, report `UNVERIFIED`, not `ACCEPT`. A leader's proposal is not the final stored verdict.
+
+## For developers
 
 ```bash
+git clone https://github.com/bearbaba/PAYJURY.git
+cd PAYJURY
+npm install
+npm run check
+cp .env.example .env
 npm run dev
 ```
 
-Use the three-step web interface. The website calls `POST /api/verify` with the real transaction details and original delivery evidence. Only an independently verified transfer can yield `PREPARED_NOT_FILED`. If the RPC or receipt is unavailable, report `NOT_VERIFIED` and stop. Never use a fabricated hash or demo fixture to represent a payment.
+Set a trustworthy Base Sepolia and Studionet RPC in your local environment. The public proof can be inspected without local configuration.
 
-### Actual payment (separate, explicit approval)
-
-The repository includes `npm run pay:testnet -- --execute`, **but do not invoke it automatically**. It uses a dedicated Base Sepolia key and requires a precise merchant allowlist, EIP-3009 exact 0.01 test USDC quote, and `PAYJURY_CONFIRM_ONE_PAYMENT=I_APPROVE_ONE_TESTNET_X402_PAYMENT`. The script writes a permanent one-shot marker. A timeout, HTTP error, 402 mismatch, or missing settlement receipt must never trigger an automatic second payment. Read [live client safety](docs/X402_LIVE_CLIENT.md).
-
-### GenLayer adjudication
-
-Only with explicit permission from the operator: deploy `contracts/PayJury.py`, file a new `pj_...` case once with the exact packet fields, then adjudicate once. Record real TX hashes and check `FINALIZED` plus successful GenVM receipts. If result is `FILED`, `UNKNOWN`, `UNVERIFIABLE`, conflicting or ambiguous, report that exact state rather than success. Never retry a signed operation solely to repair missing output.
-
-## Output contract
-
-Always provide these separate fields:
-- `paymentEvidence`: `QUOTE_ONLY` / `TRANSFER_VERIFIED` / `UNVERIFIED`
-- `x402Receipt`: `MATCHED_HEADER` / `UNAVAILABLE` (untrusted merchant metadata)
-- `caseStatus`: `NOT_PREPARED` / `PREPARED_NOT_FILED` / `FILED` / `DECIDED`
-- `verdict`: `ACCEPT` / `REWORK` / `UNVERIFIABLE` / `UNVERIFIED`
-- `chainEvidence`: actual public transaction hashes/explorer links *only when observed and matched*
-- `unresolved`: explicit missing proof, failed readback or next safe manual verification
-
-Never collapse quote inspection, token settlement, API response delivery or GenLayer consensus into a single invented `SUCCESS`.
-
-## Safety
-Do not request, expose, print or commit private keys, private wallet sessions, `PAYMENT-SIGNATURE`, API bearer tokens, full webhook URLs, or sensitive personal data. No custody, escrow, penalties or refunds.
+For an unrelated new case, start with read-only quote inspection and receipt validation; use `POST /api/verify` to prepare a canonical `PREPARED_NOT_FILED` packet. Wallet-authorized x402 payment, new filing and AI decision must be explicitly approved **only for a distinct transaction**. This skill never performs those writes. See [security boundaries](docs/SECURITY.md), [mission guide](docs/PARTNER_DEMO_2026.md) and [README](README.md).
